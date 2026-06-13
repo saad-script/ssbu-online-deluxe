@@ -94,8 +94,9 @@ Best profile for emulator:
 Best profile for doubles:
   - LLDoubles
 
-> Applies **selected render profile automatically** when entering a valid online match.  
+> The mod will apply the **selected render profile automatically** when entering a valid online match.  
 > Reverts to **vanilla settings** after exiting  
+> You can play offline/training modes without having to worry about timing differences.
 
 ## 📝 Notes and Contribution
 
