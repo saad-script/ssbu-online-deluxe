@@ -22,7 +22,7 @@ A performance and online enhancement mod for **Super Smash Bros. Ultimate** that
   - Right click SSBU -> Click `Configure Game` -> Click `System` tab -> Check `RNG Seed` -> Set to `00000000`
 
 > ⚠️ The latest skyline currently causes a crash. Use the skyline files bundled in with the release zip.  
-> ⚡ If you are using emulator, I recommend using [yuzu-ssbu-optimizer](https://github.com/saad-script/yuzu-ssbu-optimizer/releases). It will setup everything for you.
+> ⚡ If you are using emulator, I recommend using [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). It will setup everything for you.
 
 
 ## 🎮 Controls
@@ -42,7 +42,7 @@ See 'Features' section below to see what these options do
 
 - `ZL + ZR + D-Pad Down` → Cycle between current window mode
   - Window Modes: `Hidden`, `Full Info`, `Performance Info`
-  - In `Performance Info Mode`:
+  - In `Full Info Mode`:
     - `D-Pad Up / Down` → Select option
     - `D-Pad Left / Right` → Change value
 
