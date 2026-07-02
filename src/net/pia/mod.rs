@@ -140,21 +140,9 @@ fn on_station_connection_changed(
 }
 
 fn send_pia_data_hook(_station: ConnectedStation, data: &mut [u8]) {
-    let latency_bits = LatencySliderManager::instance()
-        .active_latency()
-        .unwrap_or_else(|| LatencySliderManager::instance().selected_latency())
-        .to_bits();
-    let rps_bits = match is_in_real_game() {
-        false => RenderProfileManager::instance().selected_render_profile_settings(),
-        true => RenderProfileManager::active_render_profile_settings(),
+    for byte in data.iter_mut() {
+        *byte = 0;
     }
-    .to_bits();
-    let payload = PiaCustomNetPacket {
-        version: PIA_CUSTOM_COMMS_VERSION,
-        latency_bits: latency_bits,
-        render_profile_settings_bits: rps_bits,
-    };
-    data.copy_from_slice(payload.as_bytes());
 }
 
 fn receive_pia_data_hook(station: ConnectedStation, data: &[u8]) {
