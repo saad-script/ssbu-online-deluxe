@@ -184,11 +184,6 @@ pub fn is_in_game() -> bool {
 }
 
 #[inline]
-pub fn is_in_training_game() -> bool {
-    MATCH_STATUS.load(Ordering::SeqCst) == MatchStatus::Training as u8
-}
-
-#[inline]
 pub fn is_in_real_game() -> bool {
     let match_status = MATCH_STATUS.load(Ordering::SeqCst);
     match_status == MatchStatus::Singles as u8 || match_status == MatchStatus::Doubles as u8

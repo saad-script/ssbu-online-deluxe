@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::utils::duration_since_tick;
@@ -119,11 +121,6 @@ impl Poller<'_> {
     pub fn poll(&self) {
         self.pressed_btns
             .store(ninput::any::combined_buttons().bits(), Ordering::SeqCst);
-    }
-
-    pub fn clear(&self) {
-        self.pressed_btns
-            .store(ninput::Buttons::empty().bits(), Ordering::SeqCst);
     }
 
     pub fn snapshot(&self) -> InputSnapshot<'_> {

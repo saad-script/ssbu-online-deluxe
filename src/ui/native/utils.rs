@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use skyline::nn::ui2d::{Pane, PaneFlag, TextBox};
 
 #[skyline::from_offset(0x37a22f0)]

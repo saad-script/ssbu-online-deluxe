@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
-#[allow(dead_code)]
 pub mod interface;
 
 static LAST_SCANNED_NUM_NETWORKS: AtomicU8 = AtomicU8::new(0);

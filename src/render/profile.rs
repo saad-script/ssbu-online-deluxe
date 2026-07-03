@@ -154,24 +154,32 @@ impl RenderProfileSettings {
             | ((self.render_opts_enabled as u16) << 13)
             | ((self.boost_enabled as u16) << 14)
     }
+
+    #[allow(dead_code)]
     pub fn buffer_mode(&self) -> BufferMode {
         self.buffer_mode
     }
+    #[allow(dead_code)]
     pub fn index_mode(&self) -> IndexMode {
         self.index_mode
     }
+    #[allow(dead_code)]
     pub fn default_resolution_level(&self) -> ResolutionLevel {
         self.default_resolution_level
     }
+    #[allow(dead_code)]
     pub fn dynamic_res_enabled(&self) -> bool {
         self.dynamic_res_enabled
     }
+    #[allow(dead_code)]
     pub fn vsync_enabled(&self) -> bool {
         self.vsync_enabled
     }
+    #[allow(dead_code)]
     pub fn render_opts_enabled(&self) -> bool {
         self.render_opts_enabled
     }
+    #[allow(dead_code)]
     pub fn boost_enabled(&self) -> bool {
         self.boost_enabled
     }
@@ -280,6 +288,7 @@ pub struct RenderProfileManager {
     selected_profile_settings: AtomicU16,
 }
 
+#[allow(dead_code)]
 impl RenderProfileManager {
     const fn new() -> Self {
         RenderProfileManager {

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use skyline::nn::os::Tick;
 use std::time::Duration;
 

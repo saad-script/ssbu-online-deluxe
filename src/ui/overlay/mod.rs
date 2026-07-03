@@ -682,19 +682,6 @@ pub fn toggle_window(magic_pressed: bool) {
     }
 }
 
-pub fn set_window_open(show: bool) {
-    let next_state = if show {
-        WINDOW_STATE_INTERACT
-    } else {
-        WINDOW_STATE_HIDDEN
-    };
-    WINDOW_STATE.store(next_state, Ordering::SeqCst);
-}
-
-pub fn is_window_open() -> bool {
-    WINDOW_STATE.load(Ordering::SeqCst) != WINDOW_STATE_HIDDEN
-}
-
 pub fn is_window_interactable() -> bool {
     WINDOW_STATE.load(Ordering::SeqCst) == WINDOW_STATE_INTERACT
 }

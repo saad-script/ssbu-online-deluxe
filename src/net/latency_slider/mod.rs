@@ -30,13 +30,6 @@ impl Latency {
         self.buffer
             .store((prev_delay - 1).max(VALUE_AUTO), Ordering::SeqCst);
     }
-    pub fn get_buffer(&self) -> Option<u8> {
-        let buffer = self.buffer.load(Ordering::SeqCst);
-        if buffer < 0 {
-            return None;
-        }
-        Some(buffer as u8)
-    }
     pub fn to_bits(&self) -> u8 {
         self.buffer.load(Ordering::SeqCst) as u8
     }
@@ -64,13 +57,6 @@ impl Latency {
         Latency {
             buffer: AtomicI8::new(VALUE_UNKNOWN),
         }
-    }
-    pub fn get_last_auto() -> Option<u8> {
-        let last_auto = LAST_AUTO.load(Ordering::SeqCst);
-        if last_auto < 0 {
-            return None;
-        }
-        Some(last_auto as u8)
     }
 }
 
