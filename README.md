@@ -34,14 +34,14 @@ A performance and online enhancement mod for **Super Smash Bros. Ultimate** that
 ### Automatic Installation
 
 Console:
-- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder for you in a newly created folder `sdcard/`.
-- Then copy the contents of `sdcard/` to the root of your SD card.
+- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to the root of your SD card.
+- Alternatively, you can use the app I made: [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). Install, then click `Generate SDCard Folder`, then copy the generate folder contents to the root of the sd card.
 
 Emulator:
-- You can use the same script above, but just copy it into the `sdmc` folder instead:
+- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to your `eden/sdmc` folder.
   - Then, apply this workaround if you are on Eden emulator:
     - Right click SSBU -> Click `Configure Game` -> Click `System` tab -> Check `RNG Seed` -> Set to `00000000`
-- Alternatively, you can use the app I made: [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). It will setup everything for you.
+- Alternatively, you can use the app I made: [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). Install, and then configure it to point to the correct eden folder, then check `SSBU Settings`, `SSBU Mods`, `Save Data` (if you want a 100% save), then click optimize.
 
 
 ### Verify
@@ -79,10 +79,13 @@ Verify that your sdcard directory strucure looks like this on your switch or emu
 
 ### Native UI (Online Character Select Screen and Online Arena)
 
+> Note: `All Shoulder Buttons` = `L + R + Z` on gamecube controller, `ZL + ZR + L + R` on procontroller
+
 - On the character select screen or online arena:
   - `D-pad Left/Right`: Select network latency
   - `D-pad Up/Down`: Select render profile
-  - `Left Trigger + Right Trigger + Z + X`: Toggle FPS Boost mode (AKA FPS++ mode)
+  - `All Shoulder Buttons + X`: Toggle FPS Boost Mode (AKA FPS++ mode)
+  - `All Shoulder Buttons + Y`: Toggle Streamer Mode (show/hide custom native ui)
 
 - On the character select screen (more than one opponent):
   - `Left Trigger + Right Trigger + Dpad Left/Right`: Cycle between which opponent's network info to show
@@ -97,7 +100,7 @@ See 'Features' section below to see what these options do
     - `D-Pad Up / Down` → Select row
     - `D-Pad Left / Right` → Change value
     - While row `NetProfile` is selected:
-      - `Left Trigger + Right Trigger + Z + X`: Toggle FPS Boost mode (AKA FPS++ mode)
+      - `All Shoulder Buttons + X`: Toggle FPS Boost mode (AKA FPS++ mode)
 
 See 'Features' section below to see what these options do
 
