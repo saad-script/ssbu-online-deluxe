@@ -148,6 +148,10 @@ fn update_match_status(match_status: MatchStatus) {
             crate::perf_scaler::match_cleanup();
             crate::render::profile::match_cleanup();
         }
+    } else {
+        if match_status != MatchStatus::Inactive {
+            crate::perf_scaler::match_reinit();
+        }
     }
 }
 

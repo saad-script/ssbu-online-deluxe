@@ -3,6 +3,7 @@ use ultelier::sync_guest::{self, ResolutionLevel};
 
 mod common;
 mod sephiroth;
+mod utils;
 
 use crate::render::profile::RenderProfileManager;
 
@@ -37,9 +38,14 @@ pub(in crate::perf_scaler) fn pop_dynamic_res_report() {
 }
 
 pub(crate) fn match_init() {
+    sync_guest::clear_all_dynamic_res_report();
     let rps = RenderProfileManager::active_render_profile_settings();
     let base_res_level = rps.default_resolution_level();
     ENTRY_BASE_RESOLUTION.store(base_res_level as u8, Ordering::SeqCst);
+}
+
+pub(crate) fn match_reinit() {
+    sync_guest::clear_all_dynamic_res_report();
 }
 
 pub(crate) fn match_cleanup() {

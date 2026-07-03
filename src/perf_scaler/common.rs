@@ -1,6 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI8, Ordering};
 
-use skyline::hooks::InlineCtx;
 use smashline::{
     skyline_smash::{
         app::{
@@ -12,88 +11,105 @@ use smashline::{
     *,
 };
 
-use crate::perf_scaler::{pop_dynamic_res_report, push_dynamic_res_report};
+use crate::perf_scaler::{
+    pop_dynamic_res_report, push_dynamic_res_report, utils::is_valid_fighter_entry_id,
+};
 
-static CRITICAL_ATTACK_LANDED: AtomicBool = AtomicBool::new(false);
+const CRITICAL_HIT_FINISH_COOLDOWN_FRAMES: i8 = 7;
+static CRITICAL_HIT_ACTIVE: [AtomicBool; 8] = [const { AtomicBool::new(false) }; 8];
+static CRITICAL_HIT_COOLDOWN: [AtomicI8; 8] =
+    [const { AtomicI8::new(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES) }; 8];
 
-extern "C" {
-    #[link_name = "\u{1}_ZN3lib9SingletonIN3app14FighterManagerEE9instance_E"]
-    static mut FIGHTER_MANAGER: *mut app::FighterManager;
-
-    #[link_name = "\u{1}_ZN3app8lua_bind38FighterManager__get_fighter_entry_implEPNS_14FighterManagerENS_14FighterEntryIDE"]
-    fn get_fighter_entry(arg1: *mut app::FighterManager, arg2: i32) -> u64;
+unsafe extern "C" fn global_critical_hit_init(fighter: &mut L2CFighterCommon) {
+    let entry_id = WorkModule::get_int(
+        fighter.module_accessor,
+        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
+    );
+    if !is_valid_fighter_entry_id(entry_id) {
+        return;
+    }
+    CRITICAL_HIT_ACTIVE[entry_id as usize].store(false, Ordering::SeqCst);
+    CRITICAL_HIT_COOLDOWN[entry_id as usize]
+        .store(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES, Ordering::SeqCst);
 }
 
-fn is_valid_fighter_entry_id(entry_id: i32) -> bool {
-    unsafe {
-        if entry_id < 0 || entry_id > 7 {
-            return false;
-        }
-        let entry = get_fighter_entry(FIGHTER_MANAGER, entry_id);
-        return entry != 0;
+unsafe extern "C" fn global_critical_hit_fighter_frame(fighter: &mut L2CFighterCommon) {
+    let entry_id = WorkModule::get_int(
+        fighter.module_accessor,
+        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
+    );
+    if !is_valid_fighter_entry_id(entry_id) {
+        return;
     }
-}
-
-unsafe extern "C" fn global_camera_zoom_state_fighter_frame(fighter: &mut L2CFighterCommon) {
-    const CRITICAL_HIT_FINISH_COOLDOWN_FRAMES: i32 = 7;
-    static mut CRITICAL_HIT_ACTIVE: bool = false;
-    static mut CRITICAL_HIT_FINISH_COOLDOWN_FRAMES_LEFT: i32 = CRITICAL_HIT_FINISH_COOLDOWN_FRAMES;
-    static mut MAIN_ENTRY_ID: i32 = -1;
-
-    if !is_valid_fighter_entry_id(MAIN_ENTRY_ID) {
-        for i in 0..8 {
-            if is_valid_fighter_entry_id(i) {
-                MAIN_ENTRY_ID = i;
-                break;
-            }
-        }
-    }
-
-    let module_accessor = app::sv_system::battle_object_module_accessor(fighter.lua_state_agent);
-    let entry_id = WorkModule::get_int(module_accessor, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
-    if entry_id != MAIN_ENTRY_ID {
+    let critical_hit_active = CRITICAL_HIT_ACTIVE[entry_id as usize].load(Ordering::SeqCst);
+    if !critical_hit_active {
         return;
     }
 
-    if !CRITICAL_ATTACK_LANDED.load(Ordering::SeqCst) {
-        return;
-    }
-
-    let is_slow = SlowModule::is_slow(module_accessor);
+    let is_slow = SlowModule::is_slow(fighter.module_accessor);
 
     if is_slow {
-        CRITICAL_HIT_FINISH_COOLDOWN_FRAMES_LEFT = CRITICAL_HIT_FINISH_COOLDOWN_FRAMES;
-        CRITICAL_HIT_ACTIVE = true;
-    } else if CRITICAL_HIT_ACTIVE {
-        CRITICAL_HIT_FINISH_COOLDOWN_FRAMES_LEFT -= 1;
+        CRITICAL_HIT_COOLDOWN[entry_id as usize]
+            .store(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES, Ordering::SeqCst);
+    } else {
+        let prev = CRITICAL_HIT_COOLDOWN[entry_id as usize].fetch_sub(1, Ordering::SeqCst);
+        let cooldown_frames_left = prev - 1;
+
         println!(
             "[CRITICAL_HIT_DRS] critical hit finish cooldown frames left: {}",
-            CRITICAL_HIT_FINISH_COOLDOWN_FRAMES_LEFT
+            cooldown_frames_left
         );
-        if CRITICAL_HIT_FINISH_COOLDOWN_FRAMES_LEFT <= 0 {
-            CRITICAL_HIT_ACTIVE = false;
-            println!("[CRITICAL_HIT_DRS] intensive_frame_end");
+        if cooldown_frames_left <= 0 {
             pop_dynamic_res_report();
-            CRITICAL_ATTACK_LANDED.store(false, Ordering::SeqCst);
+            CRITICAL_HIT_ACTIVE[entry_id as usize].store(false, Ordering::SeqCst);
+            println!(
+                "[CRITICAL_HIT_DRS] intensive_frame_end entry_id={}",
+                entry_id
+            );
         }
     }
 }
 
-/*
- * Hooks into app::sv_animcmd::EFFECT_GLOBAL_BACK_GROUND_CUT_IN_CENTER_POS.
- * We inline hook here to avoid conflict with HDR or other mods using the same function
- */
-#[skyline::hook(offset = 0x228f8c0, inline)]
-unsafe fn cut_in_center(_: &InlineCtx) {
-    if !CRITICAL_ATTACK_LANDED.swap(true, Ordering::SeqCst) {
-        println!("[CRITICAL_HIT_DRS] intensive_frame_start");
+#[skyline::hook(offset = 0x06a7100)]
+unsafe fn fighter_cut_in_start(
+    figher_cut_in_manager: u64,
+    boma: *mut app::BattleObjectModuleAccessor,
+    cut_in_transactor: u64,
+    cut_in_type: u32,
+    cut_in_data: u64,
+    cut_in_priority: u32,
+) {
+    call_original!(
+        figher_cut_in_manager,
+        boma,
+        cut_in_transactor,
+        cut_in_type,
+        cut_in_data,
+        cut_in_priority
+    );
+
+    println!("[CRITICAL_HIT_DRS] FighterCutInStart");
+    let entry_id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+    if !is_valid_fighter_entry_id(entry_id) {
+        println!(
+            "[CRITICAL_HIT_DRS] ERROR: FigherCutInStart called on invalid entry_id={}",
+            entry_id
+        );
+        return;
+    }
+    if !CRITICAL_HIT_ACTIVE[entry_id as usize].swap(true, Ordering::SeqCst) {
+        println!(
+            "[CRITICAL_HIT_DRS] intensive_frame_start, entry_id={}",
+            entry_id
+        );
         push_dynamic_res_report();
     }
 }
 
 pub fn install() {
-    skyline::install_hooks!(cut_in_center);
+    skyline::install_hooks!(fighter_cut_in_start);
     Agent::new("fighter")
-        .on_line(Main, global_camera_zoom_state_fighter_frame)
+        .on_start(global_critical_hit_init)
+        .on_line(Main, global_critical_hit_fighter_frame)
         .install();
 }

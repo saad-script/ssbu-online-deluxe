@@ -1,51 +1,59 @@
 use smashline::{
     skyline_smash::{
-        app::{
-            self,
-            lua_bind::{StatusModule, WorkModule},
-        },
+        app::lua_bind::{StatusModule, WorkModule},
         lib::lua_const::{
             FIGHTER_EDGE_STATUS_KIND_SPECIAL_N_SHOOT,
             FIGHTER_EDGE_STATUS_SPECIAL_N_WORK_INT_CHARGE_KIND,
+            FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
         },
     },
     *,
 };
 
-use crate::perf_scaler::{pop_dynamic_res_report, push_dynamic_res_report};
+use crate::perf_scaler::{
+    pop_dynamic_res_report, push_dynamic_res_report, utils::is_valid_fighter_entry_id,
+};
+
+static mut GIGAFLARE_ACTIVE: [bool; 8] = [false; 8];
+
+unsafe extern "C" fn sephiroth_init(fighter: &mut L2CFighterCommon) {
+    let entry_id = WorkModule::get_int(
+        fighter.module_accessor,
+        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
+    );
+    if !is_valid_fighter_entry_id(entry_id) {
+        return;
+    }
+    GIGAFLARE_ACTIVE[entry_id as usize] = false;
+}
 
 unsafe extern "C" fn sephiroth_fighter_frame(fighter: &mut L2CFighterCommon) {
-    static mut GIGAFLARE_ACTIVE: bool = false;
-    static mut PREV_STATUS: i32 = i32::MIN;
-    static mut PREV_CHARGE_KIND: i32 = i32::MIN;
-    static mut PREV_FULLY_CHARGED_SHOOT: bool = false;
-    let module_accessor = app::sv_system::battle_object_module_accessor(fighter.lua_state_agent);
+    let entry_id = WorkModule::get_int(
+        fighter.module_accessor,
+        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
+    );
+    if !is_valid_fighter_entry_id(entry_id) {
+        return;
+    }
 
-    let status = StatusModule::status_kind(module_accessor);
+    let status = StatusModule::status_kind(fighter.module_accessor);
     let charge_kind = WorkModule::get_int(
-        module_accessor,
+        fighter.module_accessor,
         *FIGHTER_EDGE_STATUS_SPECIAL_N_WORK_INT_CHARGE_KIND,
     );
     let fully_charged_shoot =
-        status == *FIGHTER_EDGE_STATUS_KIND_SPECIAL_N_SHOOT && charge_kind >= 2;
+        status == *FIGHTER_EDGE_STATUS_KIND_SPECIAL_N_SHOOT && charge_kind >= 3;
 
-    if PREV_STATUS != status
-        || PREV_CHARGE_KIND != charge_kind
-        || PREV_FULLY_CHARGED_SHOOT != fully_charged_shoot
-    {
-        PREV_STATUS = status;
-        PREV_CHARGE_KIND = charge_kind;
-        PREV_FULLY_CHARGED_SHOOT = fully_charged_shoot;
-    }
+    let gigaflare_active = GIGAFLARE_ACTIVE[entry_id as usize];
 
     if fully_charged_shoot {
-        if !GIGAFLARE_ACTIVE {
-            GIGAFLARE_ACTIVE = true;
+        if !gigaflare_active {
+            GIGAFLARE_ACTIVE[entry_id as usize] = true;
             println!("[SEPHIROTH_DRS] intensive_frame_start");
             push_dynamic_res_report();
         }
-    } else if GIGAFLARE_ACTIVE {
-        GIGAFLARE_ACTIVE = false;
+    } else if gigaflare_active {
+        GIGAFLARE_ACTIVE[entry_id as usize] = false;
         println!("[SEPHIROTH_DRS] intensive_frame_end");
         pop_dynamic_res_report();
     }
@@ -53,6 +61,7 @@ unsafe extern "C" fn sephiroth_fighter_frame(fighter: &mut L2CFighterCommon) {
 
 pub fn install() {
     Agent::new("edge")
+        .on_start(sephiroth_init)
         .on_line(Main, sephiroth_fighter_frame)
         .install();
 }
