@@ -1,10 +1,11 @@
 use crate::{
-    input_poll::{InputSnapshot, PollerContext, POLLER},
+    input_poll::InputSnapshot,
     net::{
         is_in_valid_online_game, is_valid_online_mode, latency_slider::LatencySliderManager,
         pia::StationExt,
     },
     render::profile::RenderProfileManager,
+    ui::{check_overlay_toggle_buttons_pressed, OVERLAY_POLLER},
     utils::is_emulator,
 };
 use imgui_api::bindings::*;
@@ -13,8 +14,6 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use ultelier::sync_guest::{self, BufferMode, IndexMode, ResolutionLevel};
 
-static OVERLAY_UI_POLLER_CONTEXT: PollerContext =
-    PollerContext::new(std::time::Duration::from_millis(167));
 static IMGUI_EMPTY_CELL_STR: &str = "---\0";
 static IMGUI_INTERACT_TABLE_ROW_NAME_STRS: [&str; 4] =
     ["Name\0", "Ping\0", "NetLatency\0", "NetProfile\0"];
@@ -557,17 +556,16 @@ unsafe fn draw_debug_table(first_col_width: f32) {
 }
 
 unsafe extern "C" fn draw() {
-    POLLER.poll();
-    let input_snapshot = POLLER.snapshot(&OVERLAY_UI_POLLER_CONTEXT);
-    let is_toggle_window_pressed = input_snapshot
-        .is_pressed(ninput::Buttons::ZL | ninput::Buttons::ZR | ninput::Buttons::DOWN)
-        || input_snapshot
-            .is_pressed(ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::DOWN);
+    OVERLAY_POLLER.poll();
+    let input_snapshot = OVERLAY_POLLER.snapshot();
+    let toggle_window_buttons = check_overlay_toggle_buttons_pressed(&input_snapshot);
 
     let magic_pressed =
-        input_snapshot.is_pressed_any_immediate(ninput::Buttons::MINUS | ninput::Buttons::PLUS);
+        input_snapshot.is_pressed_any(ninput::Buttons::MINUS | ninput::Buttons::PLUS);
 
-    if is_toggle_window_pressed {
+    if !toggle_window_buttons.is_empty()
+        && input_snapshot.is_pressed_with_cooldown(toggle_window_buttons)
+    {
         toggle_window(magic_pressed);
     }
 
@@ -641,8 +639,8 @@ unsafe extern "C" fn draw() {
     }
 
     if interact_view {
-        let menu_btns_pressed =
-            input_snapshot.check_buttons_pressed(&[ninput::Buttons::UP, ninput::Buttons::DOWN]);
+        let menu_btns_pressed = input_snapshot
+            .check_buttons_pressed_with_cooldown(&[ninput::Buttons::UP, ninput::Buttons::DOWN]);
         match menu_btns_pressed {
             ninput::Buttons::UP => move_row_cursor(-1),
             ninput::Buttons::DOWN => move_row_cursor(1),

@@ -37,11 +37,10 @@ pub enum MatchStatus {
 
 extern "C" {
     #[link_name = "\u{1}_ZN3app9smashball16is_training_modeEv"]
-    pub fn is_training_mode() -> bool;
-}
-extern "C" {
+    fn is_training_mode() -> bool;
+
     #[link_name = "\u{1}_ZN3app7fighter23get_fighter_entry_countEv"]
-    pub fn get_fighter_entry_count() -> i32;
+    fn get_fighter_entry_count() -> i32;
 }
 
 #[skyline::hook(offset = 0x235a650, inline)]
@@ -260,5 +259,6 @@ pub(super) fn install() {
         on_stage_presetup,
     );
     latency_slider::install();
+    ldn::install();
     pia::install();
 }

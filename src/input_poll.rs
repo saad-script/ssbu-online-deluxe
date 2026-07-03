@@ -8,15 +8,15 @@ pub struct InputSnapshot<'a> {
 }
 
 impl InputSnapshot<'_> {
-    pub fn is_pressed_immediate(&self, buttons: ninput::Buttons) -> bool {
+    pub fn is_pressed(&self, buttons: ninput::Buttons) -> bool {
         self.pressed_btns.contains(buttons)
     }
 
-    pub fn is_pressed_any_immediate(&self, buttons: ninput::Buttons) -> bool {
+    pub fn is_pressed_any(&self, buttons: ninput::Buttons) -> bool {
         self.pressed_btns.intersects(buttons)
     }
 
-    pub fn check_buttons_pressed_immediate(&self, buttons: &[ninput::Buttons]) -> ninput::Buttons {
+    pub fn check_buttons_pressed(&self, buttons: &[ninput::Buttons]) -> ninput::Buttons {
         for b in buttons {
             if self.pressed_btns.contains(*b) {
                 return *b;
@@ -25,8 +25,8 @@ impl InputSnapshot<'_> {
         return ninput::Buttons::empty();
     }
 
-    pub fn is_pressed(&self, buttons: ninput::Buttons) -> bool {
-        let pressed = self.is_pressed_immediate(buttons);
+    pub fn is_pressed_with_cooldown(&self, buttons: ninput::Buttons) -> bool {
+        let pressed = self.is_pressed(buttons);
         if !pressed {
             return false;
         }
@@ -45,8 +45,8 @@ impl InputSnapshot<'_> {
         true
     }
 
-    pub fn is_pressed_any(&self, buttons: ninput::Buttons) -> bool {
-        let pressed = self.is_pressed_any_immediate(buttons);
+    pub fn is_pressed_any_with_cooldown(&self, buttons: ninput::Buttons) -> bool {
+        let pressed = self.is_pressed_any(buttons);
         if !pressed {
             return false;
         }
@@ -65,8 +65,11 @@ impl InputSnapshot<'_> {
         true
     }
 
-    pub fn check_buttons_pressed(&self, buttons: &[ninput::Buttons]) -> ninput::Buttons {
-        let pressed = self.check_buttons_pressed_immediate(buttons);
+    pub fn check_buttons_pressed_with_cooldown(
+        &self,
+        buttons: &[ninput::Buttons],
+    ) -> ninput::Buttons {
+        let pressed = self.check_buttons_pressed(buttons);
         if pressed.is_empty() {
             return ninput::Buttons::empty();
         }
@@ -100,14 +103,16 @@ impl PollerContext {
     }
 }
 
-pub struct Poller {
+pub struct Poller<'a> {
     pressed_btns: AtomicU64,
+    context: &'a PollerContext,
 }
 
-impl Poller {
-    pub const fn new() -> Self {
+impl Poller<'_> {
+    pub const fn new<'a>(context: &'a PollerContext) -> Poller<'a> {
         Poller {
             pressed_btns: AtomicU64::new(ninput::Buttons::empty().bits()),
+            context,
         }
     }
 
@@ -116,14 +121,17 @@ impl Poller {
             .store(ninput::any::combined_buttons().bits(), Ordering::SeqCst);
     }
 
-    pub fn snapshot<'a>(&self, context: &'a PollerContext) -> InputSnapshot<'a> {
+    pub fn clear(&self) {
+        self.pressed_btns
+            .store(ninput::Buttons::empty().bits(), Ordering::SeqCst);
+    }
+
+    pub fn snapshot(&self) -> InputSnapshot<'_> {
         InputSnapshot {
             pressed_btns: unsafe {
                 ninput::Buttons::from_bits_unchecked(self.pressed_btns.load(Ordering::SeqCst))
             },
-            context,
+            context: self.context,
         }
     }
 }
-
-pub static POLLER: Poller = Poller::new();

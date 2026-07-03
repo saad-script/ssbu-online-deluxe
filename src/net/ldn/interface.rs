@@ -10,16 +10,24 @@ use crate::net::latency_slider::{Latency, LatencySliderManager};
 use crate::utils;
 
 extern "C" {
+    #[link_name = "\u{1}_ZN2nn3ldn10InitializeEv"]
+    pub fn initialize();
+
+    #[link_name = "\u{1}_ZN2nn3ldn8FinalizeEv"]
+    pub fn finalize();
+
+    #[link_name = "\u{1}_ZN2nn3ldn11OpenStationEv"]
+    pub fn open_station();
+
+    #[link_name = "\u{1}_ZN2nn3ldn12CloseStationEv"]
+    pub fn close_station();
+
     #[link_name = "\u{1}_ZN2nn3ldn14GetNetworkInfoEPNS0_11NetworkInfoE"]
     pub fn get_network_info(out_buffer_ptr: *mut NetworkInfo);
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn13CreateNetworkERKNS0_13NetworkConfigERKNS0_14SecurityConfigERKNS0_10UserConfigE"]
     pub fn create_network(network_config: u64, security_config: u64, user_config: u64);
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn7ConnectERKNS0_11NetworkInfoERKNS0_14SecurityConfigERKNS0_10UserConfigEiNS0_13ConnectOptionE"]
     pub fn connect_network(
         network_info: *mut NetworkInfo,
@@ -28,24 +36,16 @@ extern "C" {
         local_comm_ver: i32,
         connect_option: u32,
     );
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn10DisconnectEv"]
     pub fn disconnect_network();
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn14DestroyNetworkEv"]
     pub fn destroy_network();
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn8GetStateEv"]
     pub fn get_network_state() -> NetworkState;
-}
 
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn4ScanEPNS0_11NetworkInfoEPiiRKNS0_10ScanFilterEi"]
     pub fn scan_network(
         network_info: *mut NetworkInfo,
@@ -55,9 +55,6 @@ extern "C" {
         _param_5: i32,
     );
 
-}
-
-extern "C" {
     #[link_name = "\u{1}_ZN2nn3ldn14GetIpv4AddressEPNS0_11Ipv4AddressEPNS0_10SubnetMaskE"]
     pub fn get_ipv4_address(ip_address: *mut RawIPv4Address, subnet_mask: *mut RawIPv4Address);
 }

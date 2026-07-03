@@ -146,7 +146,7 @@ impl LatencySliderManager {
         prev: ninput::Buttons,
         next: ninput::Buttons,
     ) -> bool {
-        let pressed_buttons = input_snapshot.check_buttons_pressed(&[prev, next]);
+        let pressed_buttons = input_snapshot.check_buttons_pressed_with_cooldown(&[prev, next]);
         if pressed_buttons == prev {
             self.selected_latency.prev();
             return true;

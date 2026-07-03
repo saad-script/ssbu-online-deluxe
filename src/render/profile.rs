@@ -369,7 +369,7 @@ impl RenderProfileManager {
         prev: ninput::Buttons,
         next: ninput::Buttons,
     ) -> bool {
-        let boost_buttons = input_snapshot.check_buttons_pressed(&[
+        let boost_buttons = input_snapshot.check_buttons_pressed_with_cooldown(&[
             ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZL | ninput::Buttons::X,
             ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZR | ninput::Buttons::X,
         ]);
@@ -379,7 +379,7 @@ impl RenderProfileManager {
             return true;
         }
 
-        let cycle_buttons = input_snapshot.check_buttons_pressed(&[prev, next]);
+        let cycle_buttons = input_snapshot.check_buttons_pressed_with_cooldown(&[prev, next]);
         if cycle_buttons == prev {
             if self.is_auto_mode() {
                 self.set_auto_mode(false);
