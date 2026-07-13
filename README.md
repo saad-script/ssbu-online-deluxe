@@ -164,18 +164,19 @@ Best profile for doubles:
 You can specify a config file in `sd/ultimate/ssbu_online_deluxe/config.toml`
 - This will allow you to set the profile to use in the menu, and offline singles/doubles matches
 - Add '++' at the end of the profile name to enable fps boost mode (emulator only)
+- If you already have an overlclock sysmodule, and dont want to delete it, you must set `overclocker_enabled = false` so that it doesn't conflict with ssbu-online-deluxe's overclocker.
+- All fields are optional. If you dont specify a field, it will use the default/recommended value.
 
 Example `config.toml`:
 ```
-menu = "Vanilla"              # Recommended to keep this on Vanilla always
+overclocker = true                          # Set to 'false' if you are using your own overclock sysmodule
 
-[offline_match]
-singles = "LessLag"           # Applies to offline single matches (1 or 2 players)
-doubles = "LessLagDoubles"    # Applies to offline doubles matches (more than 2 players)
-
-[online_match]
-singles = "LessLagUltra++"    # 'Auto' mode will choose this profile for online single matches
-doubles = "LessLag"           # 'Auto' mode will choose this profile for online double matches
+[render_profile_config]
+menu = "Vanilla"                            # Recommended to keep this on Vanilla always
+offline_match.singles = "Vanilla"           # Applies to offline single matches (1 or 2 players)
+offline_match.doubles = "Vanilla"           # Applies to offline doubles matches (more than 2 players)
+online_match.singles = "LessLagUltra++"     # 'Auto' mode will choose this profile for online single matches
+online_match.doubles = "LessLag"            # 'Auto' mode will choose this profile for online double matches
 ```
 
 ## 📝 Notes and Contribution

@@ -16,15 +16,10 @@ use crate::perf_scaler::{
 
 static mut GIGAFLARE_ACTIVE: [bool; 8] = [false; 8];
 
-unsafe extern "C" fn sephiroth_init(fighter: &mut L2CFighterCommon) {
-    let entry_id = WorkModule::get_int(
-        fighter.module_accessor,
-        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
-    );
-    if !is_valid_fighter_entry_id(entry_id) {
-        return;
+pub fn init() {
+    for i in 0..8 {
+        unsafe { GIGAFLARE_ACTIVE[i] = false };
     }
-    GIGAFLARE_ACTIVE[entry_id as usize] = false;
 }
 
 unsafe extern "C" fn sephiroth_fighter_frame(fighter: &mut L2CFighterCommon) {
@@ -61,7 +56,6 @@ unsafe extern "C" fn sephiroth_fighter_frame(fighter: &mut L2CFighterCommon) {
 
 pub fn install() {
     Agent::new("edge")
-        .on_start(sephiroth_init)
         .on_line(Main, sephiroth_fighter_frame)
         .install();
 }

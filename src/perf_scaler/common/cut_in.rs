@@ -20,17 +20,12 @@ static CRITICAL_HIT_ACTIVE: [AtomicBool; 8] = [const { AtomicBool::new(false) };
 static CRITICAL_HIT_COOLDOWN: [AtomicI8; 8] =
     [const { AtomicI8::new(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES) }; 8];
 
-unsafe extern "C" fn global_critical_hit_init(fighter: &mut L2CFighterCommon) {
-    let entry_id = WorkModule::get_int(
-        fighter.module_accessor,
-        *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID,
-    );
-    if !is_valid_fighter_entry_id(entry_id) {
-        return;
+pub fn init() {
+    for i in 0..8 {
+        CRITICAL_HIT_ACTIVE[i as usize].store(false, Ordering::SeqCst);
+        CRITICAL_HIT_COOLDOWN[i as usize]
+            .store(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES, Ordering::SeqCst);
     }
-    CRITICAL_HIT_ACTIVE[entry_id as usize].store(false, Ordering::SeqCst);
-    CRITICAL_HIT_COOLDOWN[entry_id as usize]
-        .store(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES, Ordering::SeqCst);
 }
 
 unsafe extern "C" fn global_critical_hit_fighter_frame(fighter: &mut L2CFighterCommon) {
@@ -47,6 +42,7 @@ unsafe extern "C" fn global_critical_hit_fighter_frame(fighter: &mut L2CFighterC
     }
 
     let is_slow = SlowModule::is_slow(fighter.module_accessor);
+    println!("is_slow={}, entry_id={}", is_slow, entry_id);
 
     if is_slow {
         CRITICAL_HIT_COOLDOWN[entry_id as usize]
@@ -97,6 +93,8 @@ unsafe fn fighter_cut_in_start(
         );
         return;
     }
+    CRITICAL_HIT_COOLDOWN[entry_id as usize]
+        .store(CRITICAL_HIT_FINISH_COOLDOWN_FRAMES, Ordering::SeqCst);
     if !CRITICAL_HIT_ACTIVE[entry_id as usize].swap(true, Ordering::SeqCst) {
         println!(
             "[CRITICAL_HIT_DRS] intensive_frame_start, entry_id={}",
@@ -109,7 +107,6 @@ unsafe fn fighter_cut_in_start(
 pub fn install() {
     skyline::install_hooks!(fighter_cut_in_start);
     Agent::new("fighter")
-        .on_start(global_critical_hit_init)
         .on_line(Main, global_critical_hit_fighter_frame)
         .install();
 }

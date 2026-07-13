@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicBool, AtomicU16, Ordering},
-    RwLock,
-};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use serde::{de::IntoDeserializer, Deserialize, Deserializer};
 use ssbu_pia_interface::StationConnectionManager;
@@ -10,38 +7,174 @@ use ultelier::sync_guest::{self, profile::DockedProfile, BufferMode, IndexMode, 
 use crate::{
     input_poll::InputSnapshot,
     net::{get_match_status, is_connected, is_in_game, is_valid_online_mode, MatchStatus},
+    render::RENDER_CONFIG,
     utils::is_emulator,
 };
 
-static RENDER_PROFILE_CONFIG_FILE_PATH: &str = "sd:/ultimate/ssbu_online_deluxe/config.toml";
-static RENDER_PROFILE_CONFIG: RwLock<Option<RenderProfileConfig>> = RwLock::new(None);
-
 #[repr(C)]
-#[derive(Debug, Default)]
-pub struct FFIMatchRenderProfiles {
-    singles: *const RenderProfile,
-    doubles: *const RenderProfile,
-}
-
-#[repr(C)]
-#[derive(Debug, Default)]
-pub struct FFIRenderProfileConfig {
-    menu: *const RenderProfile,
-    offline_match: *const FFIMatchRenderProfiles,
-    online_match: *const FFIMatchRenderProfiles,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct MatchRenderProfiles {
-    singles: Option<RenderProfile>,
-    doubles: Option<RenderProfile>,
-}
-
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(default)]
 pub struct RenderProfileConfig {
-    menu: Option<RenderProfile>,
-    offline_match: Option<MatchRenderProfiles>,
-    online_match: Option<MatchRenderProfiles>,
+    menu: RenderProfile,
+    offline_match: OfflineMatchRenderProfiles,
+    online_match: OnlineMatchRenderProfiles,
+}
+
+trait MatchRenderProfiles {
+    fn singles(&self) -> RenderProfile;
+    fn doubles(&self) -> RenderProfile;
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(default)]
+pub struct OfflineMatchRenderProfiles {
+    singles: RenderProfile,
+    doubles: RenderProfile,
+}
+
+impl MatchRenderProfiles for OfflineMatchRenderProfiles {
+    fn singles(&self) -> RenderProfile {
+        self.singles
+    }
+    fn doubles(&self) -> RenderProfile {
+        self.doubles
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Deserialize, Clone)]
+#[serde(default)]
+pub struct OnlineMatchRenderProfiles {
+    singles: RenderProfile,
+    doubles: RenderProfile,
+}
+
+impl Default for OnlineMatchRenderProfiles {
+    fn default() -> Self {
+        let default_singles_preset = if is_emulator() {
+            RenderProfilePreset::LessLagUltra
+        } else {
+            RenderProfilePreset::LessLag
+        };
+        Self {
+            singles: RenderProfile {
+                preset: default_singles_preset,
+                fps_boost_status: FPSBoostStatus::Unspecified,
+            },
+            doubles: RenderProfile {
+                preset: RenderProfilePreset::LessLagDoubles,
+                fps_boost_status: FPSBoostStatus::Unspecified,
+            },
+        }
+    }
+}
+
+impl MatchRenderProfiles for OnlineMatchRenderProfiles {
+    fn singles(&self) -> RenderProfile {
+        self.singles
+    }
+    fn doubles(&self) -> RenderProfile {
+        self.doubles
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FPSBoostStatus {
+    #[default]
+    Unspecified = 0,
+    Enabled = 1,
+    Disabled = 2,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RenderProfile {
+    preset: RenderProfilePreset,
+    fps_boost_status: FPSBoostStatus,
+}
+
+impl RenderProfile {
+    pub fn new(preset: RenderProfilePreset, boost_enabled: bool) -> Self {
+        let fps_boost_status = if boost_enabled {
+            FPSBoostStatus::Enabled
+        } else {
+            FPSBoostStatus::Disabled
+        };
+        Self {
+            preset,
+            fps_boost_status,
+        }
+    }
+    pub fn from_settings(rps: &RenderProfileSettings) -> Self {
+        let preset = match (
+            rps.buffer_mode,
+            rps.index_mode,
+            rps.vsync_enabled,
+            rps.render_opts_enabled,
+        ) {
+            (BufferMode::Triple, IndexMode::TwoBehind, true, false) => RenderProfilePreset::Vanilla,
+            (BufferMode::Double, IndexMode::OneBehind, false, true) => RenderProfilePreset::LessLag,
+            (BufferMode::Double, IndexMode::Immediate, false, true) => {
+                RenderProfilePreset::LessLagUltra
+            }
+            (BufferMode::Triple, IndexMode::OneBehind, false, true) => {
+                RenderProfilePreset::LessLagDoubles
+            }
+            _ => RenderProfilePreset::Custom,
+        };
+        Self::new(preset, rps.boost_enabled)
+    }
+    pub fn boost_enabled(&self) -> bool {
+        self.fps_boost_status == FPSBoostStatus::Enabled
+    }
+}
+
+impl<'de> Deserialize<'de> for RenderProfile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let render_profile_string = String::deserialize(deserializer)?;
+        let render_profile_str = render_profile_string.trim();
+
+        let boost_enabled = render_profile_str.ends_with("+") && is_emulator();
+        let render_profile_str = render_profile_str.trim_end_matches("+");
+        let preset = RenderProfilePreset::deserialize(render_profile_str.into_deserializer())?;
+
+        Ok(Self::new(preset, boost_enabled))
+    }
+}
+
+impl std::fmt::Display for RenderProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let preset_str = match self.preset {
+            RenderProfilePreset::Vanilla => "Vanilla",
+            RenderProfilePreset::LessLag => "LessLag",
+            RenderProfilePreset::LessLagUltra => "LLUltra",
+            RenderProfilePreset::LessLagDoubles => "LLDoubles",
+            RenderProfilePreset::Custom => "Custom",
+        };
+        let boost_enabled_str = match self.boost_enabled() {
+            true => "++",
+            false => "",
+        };
+        write!(f, "{}{}", preset_str, boost_enabled_str)
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RenderProfilePreset {
+    #[default]
+    Vanilla = 0,
+    LessLag = 1,
+    #[serde(alias = "LLUltra")]
+    LessLagUltra = 2,
+    #[serde(alias = "LLDoubles")]
+    LessLagDoubles = 3,
+    Custom = 4,
 }
 
 #[derive(Debug, Clone)]
@@ -114,7 +247,7 @@ impl RenderProfileSettings {
             RenderProfilePreset::LessLagDoubles => RenderProfileSettings::less_lag_doubles(),
             _ => panic!("Must specific a valid render profile"),
         };
-        rps.boost_enabled = rp.boost_enabled;
+        rps.boost_enabled = rp.boost_enabled();
         rps
     }
     pub fn from_env() -> Self {
@@ -185,104 +318,6 @@ impl RenderProfileSettings {
     }
 }
 
-#[repr(u8)]
-#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RenderProfilePreset {
-    #[default]
-    Vanilla = 0,
-    LessLag = 1,
-    #[serde(alias = "LLUltra")]
-    LessLagUltra = 2,
-    #[serde(alias = "LLDoubles")]
-    LessLagDoubles = 3,
-    Custom = 4,
-}
-
-impl RenderProfilePreset {
-    fn recommended(is_online: bool, is_doubles: bool) -> Self {
-        if is_online {
-            if is_doubles {
-                return Self::LessLagDoubles;
-            } else {
-                if is_emulator() {
-                    return Self::LessLagUltra;
-                } else {
-                    return Self::LessLag;
-                }
-            }
-        }
-        Self::Vanilla
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RenderProfile {
-    preset: RenderProfilePreset,
-    boost_enabled: bool,
-}
-
-impl RenderProfile {
-    pub fn from_settings(rps: &RenderProfileSettings) -> Self {
-        let preset = match (
-            rps.buffer_mode,
-            rps.index_mode,
-            rps.vsync_enabled,
-            rps.render_opts_enabled,
-        ) {
-            (BufferMode::Triple, IndexMode::TwoBehind, true, false) => RenderProfilePreset::Vanilla,
-            (BufferMode::Double, IndexMode::OneBehind, false, true) => RenderProfilePreset::LessLag,
-            (BufferMode::Double, IndexMode::Immediate, false, true) => {
-                RenderProfilePreset::LessLagUltra
-            }
-            (BufferMode::Triple, IndexMode::OneBehind, false, true) => {
-                RenderProfilePreset::LessLagDoubles
-            }
-            _ => RenderProfilePreset::Custom,
-        };
-        RenderProfile {
-            preset,
-            boost_enabled: rps.boost_enabled,
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for RenderProfile {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let render_profile_string = String::deserialize(deserializer)?;
-        let render_profile_str = render_profile_string.trim();
-
-        let boost_enabled = render_profile_str.ends_with("+") && is_emulator();
-        let render_profile_str = render_profile_str.trim_end_matches("+");
-        let preset = RenderProfilePreset::deserialize(render_profile_str.into_deserializer())?;
-
-        Ok(RenderProfile {
-            preset,
-            boost_enabled,
-        })
-    }
-}
-
-impl std::fmt::Display for RenderProfile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let preset_str = match self.preset {
-            RenderProfilePreset::Vanilla => "Vanilla",
-            RenderProfilePreset::LessLag => "LessLag",
-            RenderProfilePreset::LessLagUltra => "LLUltra",
-            RenderProfilePreset::LessLagDoubles => "LLDoubles",
-            RenderProfilePreset::Custom => "Custom",
-        };
-        let boost_enabled_str = match self.boost_enabled {
-            true => "++",
-            false => "",
-        };
-        write!(f, "{}{}", preset_str, boost_enabled_str)
-    }
-}
-
 pub struct RenderProfileManager {
     auto_mode: AtomicBool,
     selected_profile_settings: AtomicU16,
@@ -334,10 +369,7 @@ impl RenderProfileManager {
             RenderProfilePreset::LessLagDoubles => RenderProfilePreset::Vanilla,
             RenderProfilePreset::Custom => RenderProfilePreset::Vanilla,
         };
-        let next_rp = RenderProfile {
-            preset: next_preset,
-            boost_enabled: selected_rp.boost_enabled,
-        };
+        let next_rp = RenderProfile::new(next_preset, selected_rp.boost_enabled());
         let next_rps = RenderProfileSettings::from_render_profile(next_rp);
         self.selected_profile_settings
             .store(next_rps.to_bits(), Ordering::SeqCst);
@@ -355,10 +387,7 @@ impl RenderProfileManager {
             RenderProfilePreset::LessLagDoubles => RenderProfilePreset::LessLagUltra,
             RenderProfilePreset::Custom => RenderProfilePreset::Vanilla,
         };
-        let prev_rp = RenderProfile {
-            preset: prev_preset,
-            boost_enabled: selected_rp.boost_enabled,
-        };
+        let prev_rp = RenderProfile::new(prev_preset, selected_rp.boost_enabled());
         let prev_rps = RenderProfileSettings::from_render_profile(prev_rp);
         self.selected_profile_settings
             .store(prev_rps.to_bits(), Ordering::SeqCst);
@@ -392,11 +421,9 @@ impl RenderProfileManager {
         if cycle_buttons == prev {
             if self.is_auto_mode() {
                 self.set_auto_mode(false);
-                let boost_enabled = self.selected_render_profile().boost_enabled;
-                let rp = RenderProfile {
-                    preset: RenderProfilePreset::Vanilla,
-                    boost_enabled,
-                };
+                let selected_rp = self.selected_render_profile();
+                let rp =
+                    RenderProfile::new(RenderProfilePreset::Vanilla, selected_rp.boost_enabled());
                 self.select_render_profile_immediate(rp);
             } else {
                 if self.selected_render_profile().preset == RenderProfilePreset::Vanilla {
@@ -409,11 +436,9 @@ impl RenderProfileManager {
         } else if cycle_buttons == next {
             if self.is_auto_mode() {
                 self.set_auto_mode(false);
-                let boost_enabled = self.selected_render_profile().boost_enabled;
-                let rp = RenderProfile {
-                    preset: RenderProfilePreset::Vanilla,
-                    boost_enabled,
-                };
+                let selected_rp = self.selected_render_profile();
+                let rp =
+                    RenderProfile::new(RenderProfilePreset::Vanilla, selected_rp.boost_enabled());
                 self.select_render_profile_immediate(rp);
             } else {
                 if self.selected_render_profile().preset == RenderProfilePreset::LessLagDoubles {
@@ -427,24 +452,26 @@ impl RenderProfileManager {
         false
     }
     pub fn recommended_render_profile(&self, is_online: bool, is_doubles: bool) -> RenderProfile {
-        let rpc = RENDER_PROFILE_CONFIG.read().unwrap();
-        let mrp = rpc.as_ref().and_then(|m| {
-            if is_online {
-                m.online_match.as_ref()
-            } else {
-                m.offline_match.as_ref()
-            }
-        });
-        let rp = if is_doubles {
-            mrp.and_then(|m| m.doubles)
+        let rc = RENDER_CONFIG.load();
+        let mrp: &dyn MatchRenderProfiles = if is_online {
+            &rc.render_profile_config.online_match
         } else {
-            mrp.and_then(|m| m.singles)
+            &rc.render_profile_config.offline_match
+        };
+        let mut rp = if is_doubles {
+            mrp.doubles().clone()
+        } else {
+            mrp.singles().clone()
         };
 
-        let rp = rp.unwrap_or_else(|| RenderProfile {
-            preset: RenderProfilePreset::recommended(is_online, is_doubles),
-            boost_enabled: self.selected_render_profile().boost_enabled,
-        });
+        // if boost status is unspecified, inherit from prev render profile
+        if rp.fps_boost_status == FPSBoostStatus::Unspecified {
+            rp.fps_boost_status = match self.selected_render_profile().boost_enabled() {
+                true => FPSBoostStatus::Enabled,
+                false => FPSBoostStatus::Disabled,
+            };
+        }
+
         rp
     }
     pub fn auto_select_profile(&self, is_online: bool, is_doubles: bool) {
@@ -495,7 +522,8 @@ impl RenderProfileManager {
         }
 
         // set overclock profile
-        if !is_emulator {
+        let rc = RENDER_CONFIG.load();
+        if rc.overclocker && !is_emulator {
             let oc_profile = match (RenderProfile::from_settings(&rps).preset, is_in_game()) {
                 (_, false) => DockedProfile::Rest,
                 (
@@ -540,91 +568,16 @@ pub(crate) fn match_init() {
 }
 
 pub(crate) fn match_cleanup() {
-    let rpc = RENDER_PROFILE_CONFIG.read().unwrap();
-    let menu_rp = rpc
-        .as_ref()
-        .and_then(|c| c.menu)
-        .unwrap_or_else(|| RenderProfile::default());
+    let rc = RENDER_CONFIG.load();
+    let menu_rp = rc.render_profile_config.menu;
     RenderProfileManager::apply_render_profile_settings_immediate(
         &RenderProfileSettings::from_render_profile(menu_rp),
     );
 }
 
-fn try_load_config_file() -> std::io::Result<RenderProfileConfig> {
-    let config_file = std::path::PathBuf::from(RENDER_PROFILE_CONFIG_FILE_PATH);
-    if !config_file.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "SSBU Online Deluxe config file not found",
-        ));
-    }
-
-    let contents = std::fs::read_to_string(RENDER_PROFILE_CONFIG_FILE_PATH)?;
-    let config: RenderProfileConfig = toml::from_str(contents.as_str())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
-    Ok(config)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ssbu_online_deluxe_set_render_profile_config(
-    render_profile_config: *const FFIRenderProfileConfig,
-) -> bool {
-    println!("[ssbu-online-deluxe] Setting config from external plugin...");
-    let mut rpc = RENDER_PROFILE_CONFIG.write().unwrap();
-    if render_profile_config.is_null() {
-        return false;
-    }
-    *rpc = Some(RenderProfileConfig {
-        menu: render_profile_config
-            .as_ref()
-            .and_then(|d| d.menu.as_ref().cloned()),
-        offline_match: Some(MatchRenderProfiles {
-            singles: render_profile_config
-                .as_ref()
-                .and_then(|d| d.offline_match.as_ref())
-                .and_then(|d| d.singles.as_ref().cloned()),
-            doubles: render_profile_config
-                .as_ref()
-                .and_then(|d| d.offline_match.as_ref())
-                .and_then(|d| d.doubles.as_ref().cloned()),
-        }),
-        online_match: Some(MatchRenderProfiles {
-            singles: render_profile_config
-                .as_ref()
-                .and_then(|d| d.online_match.as_ref())
-                .and_then(|d| d.singles.as_ref().cloned()),
-            doubles: render_profile_config
-                .as_ref()
-                .and_then(|d| d.online_match.as_ref())
-                .and_then(|d| d.doubles.as_ref().cloned()),
-        }),
-    });
-    return true;
-}
-
 pub(super) fn on_nro_load() {
-    let mut rpc = RENDER_PROFILE_CONFIG.write().unwrap();
-    if rpc.is_none() {
-        println!("Render profile config not specified. Trying to load from file...");
-        let render_profile_config = match try_load_config_file() {
-            Err(err) => {
-                println!("Unable to load config from file: {}", err);
-                println!("Using default config...");
-                RenderProfileConfig::default()
-            }
-            Ok(rpc) => {
-                println!("Parsed render profile config file succesfully!");
-                rpc
-            }
-        };
-        *rpc = Some(render_profile_config);
-    }
-    println!("Loaded Render Profile Config:\n{:?}", *rpc);
-
-    let menu_rp = rpc
-        .as_ref()
-        .and_then(|c| c.menu)
-        .unwrap_or_else(|| RenderProfile::default());
+    let rc = RENDER_CONFIG.load();
+    let menu_rp = rc.render_profile_config.menu;
     RenderProfileManager::apply_render_profile_settings_immediate(
         &RenderProfileSettings::from_render_profile(menu_rp),
     );

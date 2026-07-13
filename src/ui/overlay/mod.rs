@@ -9,7 +9,7 @@ use crate::{
     utils::is_emulator,
 };
 use imgui_api::bindings::*;
-use ssbu_pia_interface::{NetworkStability, StationConnectionManager};
+use ssbu_pia_interface::{NetworkInterfaceType, NetworkStability, StationConnectionManager};
 use std::fmt::Display;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use ultelier::sync_guest::{self, BufferMode, IndexMode, ResolutionLevel};
@@ -51,6 +51,18 @@ extern "C" {}
 
 unsafe extern "C" fn setup_imgui_context(imgui_ctx: *mut u64) {
     igSetCurrentContext(imgui_ctx as _);
+}
+
+fn format_ping_with_interface(rtt: Option<u64>, interface_type: NetworkInterfaceType) -> String {
+    let interface_type_str = match interface_type {
+        NetworkInterfaceType::Wifi => " [Wifi]",
+        NetworkInterfaceType::Ethernet => " [Wired]",
+        NetworkInterfaceType::Invalid => "",
+    };
+    match rtt {
+        Some(rtt) => format!("{}ms{}\0", rtt, interface_type_str),
+        None => format!("---{}\0", interface_type_str),
+    }
 }
 
 fn ping_color_for_stability(stability: NetworkStability) -> ImVec4 {
@@ -297,16 +309,17 @@ unsafe fn draw_interact_table(first_col_width: f32) {
     draw_empty_cell();
     for station in stations.iter() {
         igTableNextColumn();
-        if let Some(rtt) = station.get_rtt() {
-            let rtt = format!("{rtt} ms\0");
+        let rtt = station.get_rtt();
+        let ping_str = format_ping_with_interface(rtt, station.get_network_interface_type());
+        if rtt.is_some() {
             igPushStyleColor_Vec4(
                 ImGuiCol_Text as i32,
                 ping_color_for_stability(station.get_network_stability()),
             );
-            draw_text_cell(&rtt);
+        }
+        draw_text_cell(&ping_str);
+        if rtt.is_some() {
             igPopStyleColor(1);
-        } else {
-            draw_empty_cell();
         }
     }
 

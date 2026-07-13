@@ -2,7 +2,7 @@ mod utils;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use ssbu_pia_interface::{NetworkStability, StationConnectionManager};
+use ssbu_pia_interface::{NetworkInterfaceType, NetworkStability, StationConnectionManager};
 use utils::{PaneExt, TextBoxExt};
 
 use skyline::nn::ui2d::{HorizontalPosition, Pane, PaneFlag, TextBoxFlag, VerticalPosition};
@@ -15,6 +15,18 @@ use crate::{
 };
 
 static STREAMER_MODE: AtomicBool = AtomicBool::new(false);
+
+fn format_ping_with_interface(rtt: Option<u64>, interface_type: NetworkInterfaceType) -> String {
+    let interface_type_str = match interface_type {
+        NetworkInterfaceType::Wifi => " [Wifi]",
+        NetworkInterfaceType::Ethernet => " [Wired]",
+        NetworkInterfaceType::Invalid => "",
+    };
+    match rtt {
+        Some(rtt) => format!("{}ms{}", rtt, interface_type_str),
+        None => format!("---{}", interface_type_str),
+    }
+}
 
 fn poll_station_cycle(input_snapshot: &InputSnapshot) -> i8 {
     let station_cycle_poll = input_snapshot.check_buttons_pressed_with_cooldown(&[
@@ -131,9 +143,8 @@ pub unsafe fn update_css_ui(banner_pane1_ptr: *mut Pane) {
             let station_latency_str = station_latency
                 .map(|l| l.to_string())
                 .unwrap_or_else(|| String::from("---"));
-            let station_ping_str = station_ping
-                .map(|rtt| format!("{}ms", rtt))
-                .unwrap_or_else(|| String::from("---"));
+            let station_ping_str =
+                format_ping_with_interface(station_ping, station.get_network_interface_type());
             let station_rp_str = station_rp
                 .map(|p| p.to_string())
                 .unwrap_or_else(|| String::from("---"));
@@ -235,7 +246,6 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
     let input_snapshot = NATIVE_POLLER.snapshot();
     let streamer_mode = poll_streamer_mode(&input_snapshot);
 
-    let room_id_str = format!("ROOM ID: {}", room_id);
     let pane_tb = (*pane_handle).as_textbox();
     if streamer_mode {
         pane_tb.pos_y = -114.0;
@@ -244,7 +254,7 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
         (*pane_tb.p_material).set_color_int(0, 0, 0, 0, 0);
         (*pane_tb.p_material).set_color_int(1, 62, 164, 164, 255);
         pane_tb.set_color(255, 255, 255, 255);
-        pane_tb.set_text_string(&format!("{}", room_id_str));
+        pane_tb.set_text_string(&format!("ID: {}", room_id));
         return;
     }
 
@@ -271,9 +281,8 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
         let station_latency_str = station_latency
             .map(|l| l.to_string())
             .unwrap_or_else(|| String::from("---"));
-        let station_ping_str = station_ping
-            .map(|rtt| format!("{}ms", rtt))
-            .unwrap_or_else(|| String::from("---"));
+        let station_ping_str =
+            format_ping_with_interface(station_ping, station.get_network_interface_type());
         let station_rp_str = station_rp
             .map(|p| p.to_string())
             .unwrap_or_else(|| String::from("---"));
@@ -294,6 +303,7 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
         rp.to_string()
     };
     let local_line_str = format!("\nYou: {} | {}", local_rp_str, latency.to_string());
+    let room_id_str = format!("ROOM ID: {}", room_id);
 
     let (r, g, b, a) = match StationConnectionManager::get_network_stability() {
         NetworkStability::Stable => (0, 255, 0, 255),

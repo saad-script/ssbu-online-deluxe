@@ -176,6 +176,13 @@ fn receive_pia_data_hook(station: ConnectedStation, data: &[u8]) {
     }
 }
 
+#[cfg(feature = "dummy_connection")]
+fn dummy_connection_count() -> usize {
+    option_env!("DUMMY_CONNECTIONS")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(3)
+}
+
 pub(super) fn install() {
     ssbu_pia_interface::install();
     StationConnectionManager::set_enabled(true);
@@ -186,5 +193,5 @@ pub(super) fn install() {
     StationConnectionManager::register_station_data_received_hook(receive_pia_data_hook);
 
     #[cfg(feature = "dummy_connection")]
-    ssbu_pia_interface::setup_dummy_connection(3);
+    ssbu_pia_interface::setup_dummy_connection(dummy_connection_count());
 }

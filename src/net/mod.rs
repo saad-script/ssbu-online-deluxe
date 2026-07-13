@@ -48,7 +48,7 @@ unsafe fn main_menu_init(_: &InlineCtx) {
     LOCAL_ROOM_PANE_HANDLE.store(0, Ordering::SeqCst);
     ONLINE_ARENA_PANE_HANDLE.store(0, Ordering::SeqCst);
     MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::Offline as u8, Ordering::SeqCst);
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
 }
 
 #[skyline::hook(offset = 0x22d9d10, inline)]
@@ -56,7 +56,7 @@ unsafe fn online_melee_any_init(_: &InlineCtx) {
     LOCAL_ROOM_PANE_HANDLE.store(0, Ordering::SeqCst);
     ONLINE_ARENA_PANE_HANDLE.store(0, Ordering::SeqCst);
     MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::Offline as u8, Ordering::SeqCst);
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
 }
 
 #[skyline::hook(offset = 0x22d9c40, inline)]
@@ -64,7 +64,7 @@ unsafe fn online_bg_matchmaking_init(_: &InlineCtx) {
     LOCAL_ROOM_PANE_HANDLE.store(0, Ordering::SeqCst);
     ONLINE_ARENA_PANE_HANDLE.store(0, Ordering::SeqCst);
     MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::Offline as u8, Ordering::SeqCst);
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
 }
 
 #[skyline::hook(offset = 0x22d9b50, inline)]
@@ -89,7 +89,7 @@ unsafe fn online_arena_room_init(ctx: &skyline::hooks::InlineCtx) {
         5,
     ))
     .unwrap();
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
 }
 
 // called on local online menu init
@@ -100,7 +100,7 @@ unsafe fn online_local_menu_init(ctx: &InlineCtx) {
     let handle = *((*((ctx.registers[0].x() + 8) as *const u64) + 0x10) as *const u64);
     LOCAL_ROOM_PANE_HANDLE.store(handle, Ordering::SeqCst);
     MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::OnlineLocal as u8, Ordering::SeqCst);
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
 }
 
 #[skyline::hook(offset = 0x1bd7a80, inline)]
@@ -121,7 +121,7 @@ unsafe fn css_player_pane_num_changed(param_1: i64, prev_num: i32, changed_by_pl
         LOCAL_ONLINE_CSS_NUM_PANES_ADJUSTED = true;
         *((param_1 + 0x160) as *mut i32) = 2;
     }
-    update_match_status(MatchStatus::Inactive);
+    update_match_status(MatchStatus::Inactive, false);
     call_original!(param_1, prev_num, changed_by_player);
 }
 
@@ -135,9 +135,9 @@ unsafe fn update_css(arg: u64) {
     call_original!(arg);
 }
 
-fn update_match_status(match_status: MatchStatus) {
+fn update_match_status(match_status: MatchStatus, force_update: bool) {
     let prev = MATCH_STATUS.swap(match_status as u8, Ordering::SeqCst);
-    if prev != match_status as u8 {
+    if prev != match_status as u8 || force_update {
         println!("UPDATE MATCH STATUS: {:?}", match_status);
         if match_status != MatchStatus::Inactive {
             crate::render::profile::match_init();
@@ -146,10 +146,6 @@ fn update_match_status(match_status: MatchStatus) {
             latency_slider::match_cleanup();
             crate::perf_scaler::match_cleanup();
             crate::render::profile::match_cleanup();
-        }
-    } else {
-        if match_status != MatchStatus::Inactive {
-            crate::perf_scaler::match_reinit();
         }
     }
 }
@@ -221,12 +217,12 @@ unsafe fn on_stage_presetup(ctx: &InlineCtx) {
     // result stage (sephiroth) == 354
     let is_result_stage = stage_id == 310 || stage_id == 354;
     if is_result_stage {
-        update_match_status(MatchStatus::Inactive);
+        update_match_status(MatchStatus::Inactive, false);
         return;
     }
 
     if is_training_mode || is_waiting_room_stage {
-        update_match_status(MatchStatus::Training);
+        update_match_status(MatchStatus::Training, true);
         return;
     }
 
@@ -236,7 +232,7 @@ unsafe fn on_stage_presetup(ctx: &InlineCtx) {
     } else {
         MatchStatus::Singles
     };
-    update_match_status(match_status);
+    update_match_status(match_status, true);
 }
 
 pub(super) fn install() {

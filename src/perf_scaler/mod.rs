@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use ultelier::sync_guest::{self, ResolutionLevel};
 
 mod common;
-mod sephiroth;
+mod fighter;
 mod utils;
 
 use crate::render::profile::RenderProfileManager;
@@ -42,10 +42,8 @@ pub(crate) fn match_init() {
     let rps = RenderProfileManager::active_render_profile_settings();
     let base_res_level = rps.default_resolution_level();
     ENTRY_BASE_RESOLUTION.store(base_res_level as u8, Ordering::SeqCst);
-}
-
-pub(crate) fn match_reinit() {
-    sync_guest::clear_all_dynamic_res_report();
+    common::init();
+    fighter::init();
 }
 
 pub(crate) fn match_cleanup() {
@@ -54,5 +52,5 @@ pub(crate) fn match_cleanup() {
 
 pub(super) fn install() {
     common::install();
-    sephiroth::install();
+    fighter::install();
 }
