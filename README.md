@@ -164,7 +164,10 @@ Best profile for doubles:
 You can specify a config file in `sd/ultimate/ssbu_online_deluxe/config.toml`
 - This will allow you to set the profile to use in the menu, and offline singles/doubles matches
 - Add '++' at the end of the profile name to enable fps boost mode (emulator only)
-- If you already have an overlclock sysmodule, and dont want to delete it, you must set `overclocker_enabled = false` so that it doesn't conflict with ssbu-online-deluxe's overclocker.
+- If you already have an overclock sysmodule, and dont want to conflict with or use ssbu-online-deluxe's built in overclocker:
+  - Set `overclocker = false` in config file
+  - delete `libnx_over.nro` plugin file
+  - delete `atmosphere/contents/00FF0000A11CE0FF/` sysmodule folder
 - All fields are optional. If you dont specify a field, it will use the default/recommended value.
 
 Example `config.toml`:
