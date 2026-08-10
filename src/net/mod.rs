@@ -24,6 +24,7 @@ pub enum MatchConnectionStatus {
     Offline = 0,
     OnlineLocal = 1,
     OnlineArena = 2,
+    OnlineQuickPlay = 3,
 }
 
 #[repr(u8)]
@@ -55,7 +56,14 @@ unsafe fn main_menu_init(_: &InlineCtx) {
 unsafe fn online_melee_any_init(_: &InlineCtx) {
     LOCAL_ROOM_PANE_HANDLE.store(0, Ordering::SeqCst);
     ONLINE_ARENA_PANE_HANDLE.store(0, Ordering::SeqCst);
-    MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::Offline as u8, Ordering::SeqCst);
+    if is_online_nextendo_redirect_active() {
+        MATCH_CONNECTION_STATUS.store(
+            MatchConnectionStatus::OnlineQuickPlay as u8,
+            Ordering::SeqCst,
+        );
+    } else {
+        MATCH_CONNECTION_STATUS.store(MatchConnectionStatus::Offline as u8, Ordering::SeqCst);
+    }
     update_match_status(MatchStatus::Inactive, false);
 }
 
@@ -135,71 +143,6 @@ unsafe fn update_css(arg: u64) {
     call_original!(arg);
 }
 
-fn update_match_status(match_status: MatchStatus, force_update: bool) {
-    let prev = MATCH_STATUS.swap(match_status as u8, Ordering::SeqCst);
-    if prev != match_status as u8 || force_update {
-        println!("UPDATE MATCH STATUS: {:?}", match_status);
-        if match_status != MatchStatus::Inactive {
-            crate::render::profile::match_init();
-            crate::perf_scaler::match_init();
-        } else {
-            latency_slider::match_cleanup();
-            crate::perf_scaler::match_cleanup();
-            crate::render::profile::match_cleanup();
-        }
-    }
-}
-
-#[inline]
-pub fn is_local_online_mode() -> bool {
-    MATCH_CONNECTION_STATUS.load(Ordering::SeqCst) == MatchConnectionStatus::OnlineLocal as u8
-}
-
-#[inline]
-pub fn is_online_arena_mode() -> bool {
-    MATCH_CONNECTION_STATUS.load(Ordering::SeqCst) == MatchConnectionStatus::OnlineArena as u8
-}
-
-#[inline]
-pub fn is_valid_online_mode() -> bool {
-    #[cfg(feature = "dummy_connection")]
-    return true;
-
-    #[cfg(not(feature = "dummy_connection"))]
-    return is_online_arena_mode() || is_local_online_mode();
-}
-
-#[inline]
-pub fn is_connected() -> bool {
-    return StationConnectionManager::is_connected();
-}
-
-#[inline]
-pub fn is_in_game() -> bool {
-    MATCH_STATUS.load(Ordering::SeqCst) != MatchStatus::Inactive as u8
-}
-
-#[inline]
-pub fn is_in_real_game() -> bool {
-    let match_status = MATCH_STATUS.load(Ordering::SeqCst);
-    match_status == MatchStatus::Singles as u8 || match_status == MatchStatus::Doubles as u8
-}
-
-#[inline]
-pub fn get_match_status() -> MatchStatus {
-    match MATCH_STATUS.load(Ordering::SeqCst) {
-        1 => MatchStatus::Singles,
-        2 => MatchStatus::Doubles,
-        3 => MatchStatus::Training,
-        _ => MatchStatus::Inactive,
-    }
-}
-
-#[inline]
-pub fn is_in_valid_online_game() -> bool {
-    is_valid_online_mode() && is_in_real_game() && is_connected()
-}
-
 #[skyline::hook(offset = 0x25d8e38, inline)]
 unsafe fn on_stage_presetup(ctx: &InlineCtx) {
     let stage_base = ctx.registers[0].x();
@@ -233,6 +176,83 @@ unsafe fn on_stage_presetup(ctx: &InlineCtx) {
         MatchStatus::Singles
     };
     update_match_status(match_status, true);
+}
+
+fn update_match_status(match_status: MatchStatus, force_update: bool) {
+    let prev = MATCH_STATUS.swap(match_status as u8, Ordering::SeqCst);
+    if prev != match_status as u8 || force_update {
+        println!("UPDATE MATCH STATUS: {:?}", match_status);
+        if match_status != MatchStatus::Inactive {
+            crate::render::profile::match_init();
+            crate::perf_scaler::match_init();
+        } else {
+            latency_slider::match_cleanup();
+            crate::perf_scaler::match_cleanup();
+            crate::render::profile::match_cleanup();
+        }
+    }
+}
+
+#[inline]
+pub fn is_local_online_mode() -> bool {
+    MATCH_CONNECTION_STATUS.load(Ordering::SeqCst) == MatchConnectionStatus::OnlineLocal as u8
+}
+
+#[inline]
+pub fn is_online_arena_mode() -> bool {
+    MATCH_CONNECTION_STATUS.load(Ordering::SeqCst) == MatchConnectionStatus::OnlineArena as u8
+}
+
+#[inline]
+pub fn is_online_quickplay_mode() -> bool {
+    MATCH_CONNECTION_STATUS.load(Ordering::SeqCst) == MatchConnectionStatus::OnlineQuickPlay as u8
+}
+
+#[inline]
+pub fn is_valid_online_mode() -> bool {
+    #[cfg(feature = "dummy_connection")]
+    return true;
+
+    #[cfg(not(feature = "dummy_connection"))]
+    return is_online_arena_mode()
+        || is_local_online_mode()
+        || (is_online_nextendo_redirect_active() && is_online_quickplay_mode());
+}
+
+#[inline]
+pub fn is_connected() -> bool {
+    return StationConnectionManager::is_connected();
+}
+
+#[inline]
+pub fn is_in_game() -> bool {
+    MATCH_STATUS.load(Ordering::SeqCst) != MatchStatus::Inactive as u8
+}
+
+#[inline]
+pub fn is_in_real_game() -> bool {
+    let match_status = MATCH_STATUS.load(Ordering::SeqCst);
+    match_status == MatchStatus::Singles as u8 || match_status == MatchStatus::Doubles as u8
+}
+
+#[inline]
+pub fn get_match_status() -> MatchStatus {
+    match MATCH_STATUS.load(Ordering::SeqCst) {
+        1 => MatchStatus::Singles,
+        2 => MatchStatus::Doubles,
+        3 => MatchStatus::Training,
+        _ => MatchStatus::Inactive,
+    }
+}
+
+#[inline]
+pub fn is_in_valid_online_game() -> bool {
+    is_valid_online_mode() && is_in_real_game() && is_connected()
+}
+
+#[inline]
+pub fn is_online_nextendo_redirect_active() -> bool {
+    ultelier::sync_guest::is_online_nextendo_redirect_active().unwrap_or(false)
 }
 
 pub(super) fn install() {

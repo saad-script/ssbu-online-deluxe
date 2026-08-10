@@ -115,7 +115,8 @@ See 'Features' section below to see what these options do
   - Opponent’s current network/render settings (latency slider, render profile)
 
 ### 🎛️ Online Latency Controls
-*(Available in Online Arena and Local Online modes only)*
+*(Available in Online Arena and Local Online modes only)*  
+*(Available in Quickplay/Elite on Nextendo servers only)*
 
 - This allows you to control the online latency delay frames.
 - Adjust:
@@ -126,7 +127,8 @@ See 'Features' section below to see what these options do
 > It is recommended to manually set the latency delay frames based on the ping and connection quality.
 
 ### 🎛️ Render Profile Controls
-*(Available in Online Arena and Local Online modes only)*
+*(Available in Online Arena and Local Online modes only)*  
+*(Available in Quickplay/Elite on Nextendo servers only)*
 
 - This allows you to set the games render/graphic settings for less native input delay.
 - Adjust:

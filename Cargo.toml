@@ -1,6 +1,6 @@
 [package]
 name = "ssbu-online-deluxe"
-version = "1.2.0"
+version = "1.3.0"
 authors = ["saad-script"]
 edition = "2021"
 
@@ -22,10 +22,8 @@ imgui-api = { git = "https://github.com/Coolsonickirby/imgui-api" }
 ssbu-pia-interface = { git = "https://github.com/project-ultelier/ssbu-pia-interface.git" }
 ultelier = { git = "https://github.com/project-ultelier/smash-ultelier.git", default-features = false, features = ["sync-guest"] }
 log = "0.4.19"
-smallvec = "1.15.1"
 zerocopy = { version = "0.8.47", features = ["derive"] }
 arc-swap = "1.9.1"
-binrw = "0.11.2"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"
 

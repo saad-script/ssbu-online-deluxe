@@ -57,6 +57,7 @@ fn format_ping_with_interface(rtt: Option<u64>, interface_type: NetworkInterface
     let interface_type_str = match interface_type {
         NetworkInterfaceType::Wifi => " [Wifi]",
         NetworkInterfaceType::Ethernet => " [Wired]",
+        NetworkInterfaceType::Emulated => " [Emu]",
         NetworkInterfaceType::Invalid => "",
     };
     match rtt {
