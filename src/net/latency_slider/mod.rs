@@ -144,7 +144,7 @@ impl LatencySliderManager {
     }
 }
 
-#[skyline::hook(offset = 0x16ccc58, inline)]
+#[skyline::hook(offset = 0x16ccab8, inline)]
 unsafe fn set_online_latency(ctx: &InlineCtx) {
     if net::is_valid_online_mode() {
         println!("SET ONLINE LATENCY");
