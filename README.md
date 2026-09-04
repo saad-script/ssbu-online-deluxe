@@ -3,7 +3,7 @@
 A performance and online enhancement mod for **Super Smash Bros. Ultimate** that introduces latency controls, render optimizations, and real-time online information.
 
 
-> ⚠️ SSBU 13.0.5 does NOT change how packets are sent, received, or parsed. This mod operates exclusively at the P2P networking layer, meaning it modifies traffic exchanged directly between players. The game server is not involved in this communication and, under normal operation, should have no visibility into what this mod is doing. There is currently no known indication that 13.0.5 introduced additional checks for invalid or modified P2P packet data that could result in a ban. The risk of using this mod on 13.0.5 is therefore the same as on previous versions. Please be patient while we update this mod to work with version 13.0.5.  
+> ⚠️ SSBU 13.0.5 does **NOT** change how packets are sent, received, or parsed. This mod operates exclusively at the P2P networking layer, meaning it modifies traffic exchanged directly between players. The game server is not involved in this communication and, under normal operation, should have no visibility into what this mod is doing. There is currently no known indication that 13.0.5 introduced additional checks for invalid or modified P2P packet data that could result in a ban. **The risk of using this mod on 13.0.5 is therefore the same as on previous versions.**  
 
 > ⚠️ This is a work in progress. Features and stability may change as development continues.  
 > ⚠️ Use at your own risk. I have been testing this mod online personally without any major issues, but there is still a non-zero risk of a ban. The overclocks are intentionally minimal; however, any hardware damage or account penalties remain your responsibility.  
