@@ -2,7 +2,7 @@
 
 use skyline::nn::ui2d::{Pane, PaneFlag, TextBox};
 
-#[skyline::from_offset(0x37A28A0)]
+#[skyline::from_offset(0x37a28a0)]
 pub fn set_text_string(pane: *mut Pane, string: *const u8);
 
 #[skyline::from_offset(0x59970)]
