@@ -44,7 +44,7 @@ extern "C" {
     fn get_fighter_entry_count() -> i32;
 }
 
-#[skyline::hook(offset = 0x235a650, inline)]
+#[skyline::hook(offset = 0x235aaa0, inline)]
 unsafe fn main_menu_init(_: &InlineCtx) {
     LOCAL_ROOM_PANE_HANDLE.store(0, Ordering::SeqCst);
     ONLINE_ARENA_PANE_HANDLE.store(0, Ordering::SeqCst);
@@ -143,7 +143,7 @@ unsafe fn update_css(arg: u64) {
     call_original!(arg);
 }
 
-#[skyline::hook(offset = 0x25d8e38, inline)]
+#[skyline::hook(offset = 0x25d9288, inline)]
 unsafe fn on_stage_presetup(ctx: &InlineCtx) {
     let stage_base = ctx.registers[0].x();
     let stage_id = *((stage_base + 8) as *mut u32);
