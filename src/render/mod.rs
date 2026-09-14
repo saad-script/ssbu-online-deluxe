@@ -4,10 +4,7 @@ use arc_swap::ArcSwap;
 use serde::Deserialize;
 use ultelier::sync_guest::SsbuSyncConfig;
 
-use crate::{
-    render::profile::RenderProfileConfig,
-    utils::{is_emulator, lookup_symbol_addr},
-};
+use crate::{render::profile::RenderProfileConfig, utils::is_emulator};
 
 pub mod profile;
 
@@ -38,43 +35,12 @@ pub unsafe extern "C" fn ssbu_online_deluxe_set_render_config(
 ) -> bool {
     println!("[ssbu-online-deluxe] Setting config from external plugin...");
     if let Some(render_config) = render_config.as_ref().cloned() {
+        let overclocker_enabled = render_config.overclocker;
         RENDER_CONFIG.store(Arc::new(render_config));
-        try_load_overclock_service();
-        return true;
-    }
-    false
-}
-
-fn try_load_overclock_service() -> bool {
-    let rc = RENDER_CONFIG.load();
-    let is_emulator = is_emulator();
-    let overclocker_enabled = rc.overclocker && !is_emulator;
-    if overclocker_enabled {
-        if !nx_over_configure_nstuff_oc() {
-            skyline::error::show_error(
-                70,
-                "Unable to load overclocker service!\0",
-                "SSBU Online Deluxe requires the overclocker service to be installed correctly! Ensure 'libnx_over.nro' is present and 'sd:/atmosphere/contents/00FF0000A11CE0FF' contains the overclock service files. If you want to intentionally disable the overclocker, set 'overclocker_enabled=false' in the render config file (sd:/ultimate/ssbu_online_deluxe/config.toml). You may continue, but note that the game will drop frames and stutter heavily when using non-vanilla render profiles (LessLag, LessLagUltra, etc).\0",
-            );
-            return false;
-        }
-        return true;
-    } else {
-        println!(
-            "Overclocker load skipped! (render_config.overclocker_enabled={}, is_emulator={})",
-            rc.overclocker, is_emulator
+        ultelier::sync_guest::set_env_flag(
+            ultelier::sync_guest::EnvironmentFlags::OVERCLOCKER,
+            !is_emulator() && overclocker_enabled,
         );
-        return false;
-    }
-}
-
-fn nx_over_configure_nstuff_oc() -> bool {
-    static NX_OVER_CONFIGURE_NSTUFF_OC_SYMBOL: &[u8] = b"nx_over_configure_nstuff_oc\0";
-    if let Some(func_addr) = lookup_symbol_addr(NX_OVER_CONFIGURE_NSTUFF_OC_SYMBOL) {
-        unsafe {
-            let func: fn() -> u32 = std::mem::transmute(func_addr);
-            func();
-        }
         return true;
     }
     false
@@ -123,8 +89,7 @@ pub(super) fn install() {
         .join()
         .expect("Config loader thread crashed!");
 
-    let overclocker_loaded = try_load_overclock_service();
     let mut sync_config = SsbuSyncConfig::vanilla();
-    sync_config.overclocker = overclocker_loaded;
+    sync_config.overclocker = !is_emulator() && RENDER_CONFIG.load().overclocker;
     ultelier::sync_guest::install(sync_config);
 }

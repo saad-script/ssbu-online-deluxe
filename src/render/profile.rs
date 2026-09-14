@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use serde::{de::IntoDeserializer, Deserialize, Deserializer};
 use ssbu_pia_interface::StationConnectionManager;
-use ultelier::sync_guest::{self, profile::DockedProfile, BufferMode, IndexMode, ResolutionLevel};
+use ultelier::sync_guest::{self, BufferMode, IndexMode, OverclockProfile, ResolutionLevel};
 
 use crate::{
     input_poll::InputSnapshot,
@@ -524,19 +524,31 @@ impl RenderProfileManager {
         // set overclock profile
         let rc = RENDER_CONFIG.load();
         if rc.overclocker && !is_emulator {
-            let oc_profile = match (RenderProfile::from_settings(&rps).preset, is_in_game()) {
-                (_, false) => DockedProfile::Rest,
+            let oc_profile = match (
+                RenderProfile::from_settings(&rps).preset,
+                get_match_status(),
+            ) {
+                (RenderProfilePreset::Vanilla, _) => None,
+                (_, MatchStatus::Inactive) => None,
+                (RenderProfilePreset::LessLagUltra, _) => Some(OverclockProfile::PerformanceFfa),
                 (
-                    RenderProfilePreset::Vanilla
-                    | RenderProfilePreset::LessLag
+                    RenderProfilePreset::LessLag
+                    | RenderProfilePreset::LessLagDoubles
                     | RenderProfilePreset::Custom,
-                    _,
-                ) => DockedProfile::Singles,
-                (RenderProfilePreset::LessLagUltra | RenderProfilePreset::LessLagDoubles, _) => {
-                    DockedProfile::Ffa
-                }
+                    MatchStatus::Doubles,
+                ) => Some(OverclockProfile::PerformanceFfa),
+                (
+                    RenderProfilePreset::LessLag
+                    | RenderProfilePreset::LessLagDoubles
+                    | RenderProfilePreset::Custom,
+                    MatchStatus::Singles | MatchStatus::Training,
+                ) => Some(OverclockProfile::PerformanceSingles),
             };
-            let _ = sync_guest::profile::apply_docked_profile(oc_profile);
+            if let Some(oc_profile) = oc_profile {
+                sync_guest::profile::apply_profile(oc_profile);
+            } else {
+                sync_guest::profile::clear_profile();
+            }
         }
     }
 }
