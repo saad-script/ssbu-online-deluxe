@@ -1,15 +1,48 @@
 #![allow(static_mut_refs)]
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, LazyLock,
+};
 
+use arc_swap::ArcSwap;
+use serde::Deserialize;
 use skyline::nro::NroInfo;
 
-mod input_poll;
+use crate::{input::KeyBindingConfig, render::RenderConfig};
+
+mod input;
 mod net;
 mod perf_scaler;
 mod render;
 mod ui;
 mod utils;
+
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(default)]
+pub struct Config {
+    pub render_config: RenderConfig,
+    pub key_binding_config: KeyBindingConfig,
+}
+
+static CONFIG_FILE_PATH: &str = "sd:/ultimate/ssbu_online_deluxe/config.toml";
+static CONFIG: LazyLock<ArcSwap<Config>> =
+    LazyLock::new(|| ArcSwap::from_pointee(Config::default()));
+
+fn try_load_config_file() -> std::io::Result<Config> {
+    let config_file = std::path::PathBuf::from(CONFIG_FILE_PATH);
+    if !config_file.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "SSBU Online Deluxe config file not found",
+        ));
+    }
+
+    let contents = std::fs::read_to_string(CONFIG_FILE_PATH)?;
+    let config: Config = toml::from_str(contents.as_str())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    Ok(config)
+}
 
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
@@ -46,6 +79,29 @@ pub fn main() {
 
     skyline::nro::add_hook(on_nro_load)
         .expect("Unable to add NRO load hook! Make sure nro hook plugin is present.");
+
+    let load_config_thread = std::thread::Builder::new()
+        .stack_size(0x20000)
+        .spawn(|| unsafe {
+            skyline::nn::os::ChangeThreadPriority(skyline::nn::os::GetCurrentThread(), 5);
+            println!("Config not specified. Trying to load from file...");
+            match try_load_config_file() {
+                Err(err) => {
+                    println!("Unable to load config from file: {}", err);
+                    println!("Using default config...");
+                }
+                Ok(rc) => {
+                    println!("Parsed config file succesfully!");
+                    CONFIG.store(Arc::new(rc));
+                }
+            };
+            println!("Loaded Config:\n{:?}", CONFIG.load());
+            skyline::nn::os::ChangeThreadPriority(skyline::nn::os::GetCurrentThread(), 24);
+        })
+        .expect("Unable to spawn config loader thread!");
+    load_config_thread
+        .join()
+        .expect("Config loader thread crashed!");
 
     render::install();
     net::install();

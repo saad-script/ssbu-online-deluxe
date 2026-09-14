@@ -1,5 +1,5 @@
 use crate::{
-    input_poll::InputSnapshot,
+    input::InputSnapshot,
     net::{
         is_in_valid_online_game, is_valid_online_mode, latency_slider::LatencySliderManager,
         pia::StationExt,
@@ -572,15 +572,10 @@ unsafe fn draw_debug_table(first_col_width: f32) {
 unsafe extern "C" fn draw() {
     OVERLAY_POLLER.poll();
     let input_snapshot = OVERLAY_POLLER.snapshot();
-    let toggle_window_buttons = check_overlay_toggle_buttons_pressed(&input_snapshot);
+    let toggle_overlay_pressed = check_overlay_toggle_buttons_pressed(&input_snapshot, true);
 
-    let magic_pressed =
-        input_snapshot.is_pressed_any(ninput::Buttons::MINUS | ninput::Buttons::PLUS);
-
-    if !toggle_window_buttons.is_empty()
-        && input_snapshot.is_pressed_with_cooldown(toggle_window_buttons)
-    {
-        toggle_window(magic_pressed);
+    if toggle_overlay_pressed {
+        toggle_window();
     }
 
     let window_state = WINDOW_STATE.load(Ordering::SeqCst);
@@ -678,15 +673,14 @@ unsafe extern "C" fn draw() {
     igPopFont();
 }
 
-pub fn toggle_window(magic_pressed: bool) {
+pub fn toggle_window() {
     let mut current = WINDOW_STATE.load(Ordering::SeqCst);
     loop {
-        let next = match (current, magic_pressed) {
-            (WINDOW_STATE_HIDDEN, _) => WINDOW_STATE_INTERACT,
-            (WINDOW_STATE_INTERACT, false) => WINDOW_STATE_PERFORMANCE,
-            (WINDOW_STATE_INTERACT, true) => WINDOW_STATE_DEBUG,
-            (WINDOW_STATE_DEBUG, _) => WINDOW_STATE_PERFORMANCE,
-            (WINDOW_STATE_PERFORMANCE, _) => WINDOW_STATE_HIDDEN,
+        let next = match current {
+            WINDOW_STATE_HIDDEN => WINDOW_STATE_INTERACT,
+            WINDOW_STATE_INTERACT => WINDOW_STATE_PERFORMANCE,
+            WINDOW_STATE_PERFORMANCE => WINDOW_STATE_DEBUG,
+            WINDOW_STATE_DEBUG => WINDOW_STATE_HIDDEN,
             _ => WINDOW_STATE_HIDDEN,
         };
         match WINDOW_STATE.compare_exchange(current, next, Ordering::SeqCst, Ordering::SeqCst) {

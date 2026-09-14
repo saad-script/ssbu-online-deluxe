@@ -1,4 +1,7 @@
-use crate::input_poll::{InputSnapshot, Poller, PollerContext};
+use crate::{
+    input::{InputSnapshot, Poller, PollerContext},
+    CONFIG,
+};
 
 pub mod native;
 pub mod overlay;
@@ -7,13 +10,23 @@ static POLLER_CONTEXT: PollerContext = PollerContext::new(std::time::Duration::f
 pub static OVERLAY_POLLER: Poller = Poller::new(&POLLER_CONTEXT);
 pub static NATIVE_POLLER: Poller = Poller::new(&POLLER_CONTEXT);
 
-pub fn check_overlay_toggle_buttons_pressed(input_snapshot: &InputSnapshot) -> ninput::Buttons {
-    input_snapshot.check_buttons_pressed(&[
-        ninput::Buttons::ZL | ninput::Buttons::ZR | ninput::Buttons::DOWN,
-        ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::DOWN,
-    ])
+static mut TOGGLE_OVERLAY_KEYBIND: ninput::Buttons = ninput::Buttons::empty();
+
+pub fn check_overlay_toggle_buttons_pressed(
+    input_snapshot: &InputSnapshot,
+    cooldown: bool,
+) -> bool {
+    if cooldown {
+        input_snapshot.is_pressed_with_cooldown(unsafe { TOGGLE_OVERLAY_KEYBIND })
+    } else {
+        input_snapshot.is_pressed(unsafe { TOGGLE_OVERLAY_KEYBIND })
+    }
 }
 
 pub(super) fn install() {
+    unsafe {
+        TOGGLE_OVERLAY_KEYBIND = CONFIG.load().key_binding_config.toggle_overlay;
+    }
+    native::install();
     overlay::install();
 }

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicI8, Ordering};
 
 use skyline::hooks::InlineCtx;
 
-use crate::input_poll::InputSnapshot;
+use crate::input::InputSnapshot;
 use crate::net;
 
 const MAX_INPUT_BUFFER: u8 = 25;

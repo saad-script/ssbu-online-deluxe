@@ -5,19 +5,21 @@ use ssbu_pia_interface::StationConnectionManager;
 use ultelier::sync_guest::{self, BufferMode, IndexMode, OverclockProfile, ResolutionLevel};
 
 use crate::{
-    input_poll::InputSnapshot,
+    input::InputSnapshot,
     net::{get_match_status, is_connected, is_in_game, is_valid_online_mode, MatchStatus},
-    render::RENDER_CONFIG,
     utils::is_emulator,
+    CONFIG,
 };
+
+static mut TOGGLE_FPS_BOOST_KEYBIND: ninput::Buttons = ninput::Buttons::empty();
 
 #[repr(C)]
 #[derive(Debug, Default, Deserialize, Clone)]
 #[serde(default)]
 pub struct RenderProfileConfig {
-    menu: RenderProfile,
-    offline_match: OfflineMatchRenderProfiles,
-    online_match: OnlineMatchRenderProfiles,
+    pub menu: RenderProfile,
+    pub offline_match: OfflineMatchRenderProfiles,
+    pub online_match: OnlineMatchRenderProfiles,
 }
 
 trait MatchRenderProfiles {
@@ -407,10 +409,8 @@ impl RenderProfileManager {
         prev: ninput::Buttons,
         next: ninput::Buttons,
     ) -> bool {
-        let boost_buttons = input_snapshot.check_buttons_pressed_with_cooldown(&[
-            ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZL | ninput::Buttons::X,
-            ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZR | ninput::Buttons::X,
-        ]);
+        let boost_buttons = input_snapshot
+            .check_buttons_pressed_with_cooldown(&[unsafe { TOGGLE_FPS_BOOST_KEYBIND }]);
         if !boost_buttons.is_empty() {
             let rps = self.selected_render_profile_settings();
             self.selected_render_profile_set_boost_enabled(!rps.boost_enabled);
@@ -452,7 +452,7 @@ impl RenderProfileManager {
         false
     }
     pub fn recommended_render_profile(&self, is_online: bool, is_doubles: bool) -> RenderProfile {
-        let rc = RENDER_CONFIG.load();
+        let rc = &CONFIG.load().render_config;
         let mrp: &dyn MatchRenderProfiles = if is_online {
             &rc.render_profile_config.online_match
         } else {
@@ -522,7 +522,7 @@ impl RenderProfileManager {
         }
 
         // set overclock profile
-        let rc = RENDER_CONFIG.load();
+        let rc = &CONFIG.load().render_config;
         if rc.overclocker && !is_emulator {
             let oc_profile = match (
                 RenderProfile::from_settings(&rps).preset,
@@ -580,7 +580,7 @@ pub(crate) fn match_init() {
 }
 
 pub(crate) fn match_cleanup() {
-    let rc = RENDER_CONFIG.load();
+    let rc = &CONFIG.load().render_config;
     let menu_rp = rc.render_profile_config.menu;
     RenderProfileManager::apply_render_profile_settings_immediate(
         &RenderProfileSettings::from_render_profile(menu_rp),
@@ -588,9 +588,15 @@ pub(crate) fn match_cleanup() {
 }
 
 pub(super) fn on_nro_load() {
-    let rc = RENDER_CONFIG.load();
+    let rc = &CONFIG.load().render_config;
     let menu_rp = rc.render_profile_config.menu;
     RenderProfileManager::apply_render_profile_settings_immediate(
         &RenderProfileSettings::from_render_profile(menu_rp),
     );
+}
+
+pub(super) fn install() {
+    unsafe {
+        TOGGLE_FPS_BOOST_KEYBIND = CONFIG.load().key_binding_config.toggle_fps_boost;
+    }
 }

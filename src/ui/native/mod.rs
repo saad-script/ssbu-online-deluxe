@@ -8,13 +8,16 @@ use utils::{PaneExt, TextBoxExt};
 use skyline::nn::ui2d::{HorizontalPosition, Pane, PaneFlag, TextBoxFlag, VerticalPosition};
 
 use crate::{
-    input_poll::InputSnapshot,
+    input::InputSnapshot,
     net::{latency_slider::LatencySliderManager, ldn::num_available_networks, pia::StationExt},
     render::profile::RenderProfileManager,
     ui::{check_overlay_toggle_buttons_pressed, NATIVE_POLLER},
+    CONFIG,
 };
 
 static STREAMER_MODE: AtomicBool = AtomicBool::new(false);
+
+static mut TOGGLE_STREAMER_MODE_KEYBIND: ninput::Buttons = ninput::Buttons::empty();
 
 fn format_ping_with_interface(rtt: Option<u64>, interface_type: NetworkInterfaceType) -> String {
     let interface_type_str = match interface_type {
@@ -45,10 +48,8 @@ fn poll_station_cycle(input_snapshot: &InputSnapshot) -> i8 {
 }
 
 fn poll_streamer_mode(input_snapshot: &InputSnapshot) -> bool {
-    let streamer_mode_poll = input_snapshot.check_buttons_pressed_with_cooldown(&[
-        ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZL | ninput::Buttons::Y,
-        ninput::Buttons::L | ninput::Buttons::R | ninput::Buttons::ZR | ninput::Buttons::Y,
-    ]);
+    let streamer_mode_poll = input_snapshot
+        .check_buttons_pressed_with_cooldown(&[unsafe { TOGGLE_STREAMER_MODE_KEYBIND }]);
 
     let streamer_mode = STREAMER_MODE.load(Ordering::SeqCst);
     if !streamer_mode_poll.is_empty() {
@@ -108,8 +109,8 @@ pub unsafe fn update_css_ui(banner_pane1_ptr: *mut Pane) {
         let color = (255, 255, 255, 255);
         (LAST_GAME_BANNER_TEXT.clone(), color)
     } else {
-        let toggle_overlay_buttons = check_overlay_toggle_buttons_pressed(&input_snapshot);
-        if !crate::ui::overlay::is_window_interactable() && toggle_overlay_buttons.is_empty() {
+        let toggle_overlay_pressed = check_overlay_toggle_buttons_pressed(&input_snapshot, false);
+        if !crate::ui::overlay::is_window_interactable() && !toggle_overlay_pressed {
             let direction = poll_station_cycle(&input_snapshot);
             LatencySliderManager::instance().poll(
                 &input_snapshot,
@@ -225,8 +226,8 @@ pub unsafe fn update_local_online_ui(pane_handle: *mut Pane) {
     let display_string = if streamer_mode {
         format!("{}", num_available_networks())
     } else {
-        let toggle_overlay_buttons = check_overlay_toggle_buttons_pressed(&input_snapshot);
-        if !crate::ui::overlay::is_window_interactable() && toggle_overlay_buttons.is_empty() {
+        let toggle_overlay_pressed = check_overlay_toggle_buttons_pressed(&input_snapshot, false);
+        if !crate::ui::overlay::is_window_interactable() && !toggle_overlay_pressed {
             LatencySliderManager::instance().poll(
                 &input_snapshot,
                 ninput::Buttons::LEFT,
@@ -259,8 +260,8 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
         return;
     }
 
-    let toggle_overlay_buttons = check_overlay_toggle_buttons_pressed(&input_snapshot);
-    if !crate::ui::overlay::is_window_interactable() && toggle_overlay_buttons.is_empty() {
+    let toggle_overlay_pressed = check_overlay_toggle_buttons_pressed(&input_snapshot, false);
+    if !crate::ui::overlay::is_window_interactable() && !toggle_overlay_pressed {
         LatencySliderManager::instance().poll(
             &input_snapshot,
             ninput::Buttons::LEFT,
@@ -321,6 +322,12 @@ pub unsafe fn update_online_arena_ui(pane_handle: *mut Pane, room_id: String) {
         "{}{}{}",
         room_id_str, local_line_str, station_lines
     ));
+}
+
+pub(super) fn install() {
+    unsafe {
+        TOGGLE_STREAMER_MODE_KEYBIND = CONFIG.load().key_binding_config.toggle_streamer_mode;
+    }
 }
 
 //unsafe fn set_arena_msg_pane_text(msg_pane_root: &mut Pane, italics: bool, msg: &str) {

@@ -1,23 +1,18 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use serde::Deserialize;
 use ultelier::sync_guest::SsbuSyncConfig;
 
-use crate::{render::profile::RenderProfileConfig, utils::is_emulator};
+use crate::{render::profile::RenderProfileConfig, utils::is_emulator, CONFIG};
 
 pub mod profile;
-
-static RENDER_PROFILE_CONFIG_FILE_PATH: &str = "sd:/ultimate/ssbu_online_deluxe/config.toml";
-static RENDER_CONFIG: LazyLock<ArcSwap<RenderConfig>> =
-    LazyLock::new(|| ArcSwap::from_pointee(RenderConfig::default()));
 
 #[repr(C)]
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct RenderConfig {
-    render_profile_config: RenderProfileConfig,
-    overclocker: bool,
+    pub render_profile_config: RenderProfileConfig,
+    pub overclocker: bool,
 }
 
 impl Default for RenderConfig {
@@ -33,32 +28,22 @@ impl Default for RenderConfig {
 pub unsafe extern "C" fn ssbu_online_deluxe_set_render_config(
     render_config: *const RenderConfig,
 ) -> bool {
-    println!("[ssbu-online-deluxe] Setting config from external plugin...");
+    println!("[ssbu-online-deluxe] Setting render config from external plugin...");
     if let Some(render_config) = render_config.as_ref().cloned() {
         let overclocker_enabled = render_config.overclocker;
-        RENDER_CONFIG.store(Arc::new(render_config));
+        let config = CONFIG.load().clone();
+        let mut config = (*config).clone();
+        config.render_config = render_config;
+        CONFIG.store(Arc::new(config));
+
         ultelier::sync_guest::set_env_flag(
             ultelier::sync_guest::EnvironmentFlags::OVERCLOCKER,
-            !is_emulator() && overclocker_enabled,
+            overclocker_enabled,
         );
+
         return true;
     }
     false
-}
-
-fn try_load_config_file() -> std::io::Result<RenderConfig> {
-    let config_file = std::path::PathBuf::from(RENDER_PROFILE_CONFIG_FILE_PATH);
-    if !config_file.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "SSBU Online Deluxe config file not found",
-        ));
-    }
-
-    let contents = std::fs::read_to_string(RENDER_PROFILE_CONFIG_FILE_PATH)?;
-    let config: RenderConfig = toml::from_str(contents.as_str())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
-    Ok(config)
 }
 
 pub(super) fn on_nro_load() {
@@ -66,30 +51,8 @@ pub(super) fn on_nro_load() {
 }
 
 pub(super) fn install() {
-    let load_config_thread = std::thread::Builder::new()
-        .stack_size(0x20000)
-        .spawn(|| unsafe {
-            skyline::nn::os::ChangeThreadPriority(skyline::nn::os::GetCurrentThread(), 5);
-            println!("Render profile config not specified. Trying to load from file...");
-            match try_load_config_file() {
-                Err(err) => {
-                    println!("Unable to load config from file: {}", err);
-                    println!("Using default config...");
-                }
-                Ok(rc) => {
-                    println!("Parsed render profile config file succesfully!");
-                    RENDER_CONFIG.store(Arc::new(rc));
-                }
-            };
-            println!("Loaded Render Profile Config:\n{:?}", RENDER_CONFIG.load());
-            skyline::nn::os::ChangeThreadPriority(skyline::nn::os::GetCurrentThread(), 24);
-        })
-        .expect("Unable to spawn config loader thread!");
-    load_config_thread
-        .join()
-        .expect("Config loader thread crashed!");
-
     let mut sync_config = SsbuSyncConfig::vanilla();
-    sync_config.overclocker = !is_emulator() && RENDER_CONFIG.load().overclocker;
+    sync_config.overclocker = !is_emulator() && CONFIG.load().render_config.overclocker;
     ultelier::sync_guest::install(sync_config);
+    profile::install();
 }
