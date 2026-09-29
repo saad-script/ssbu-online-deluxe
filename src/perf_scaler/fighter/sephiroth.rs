@@ -10,9 +10,7 @@ use smashline::{
     *,
 };
 
-use crate::perf_scaler::{
-    pop_dynamic_res_report, push_dynamic_res_report, utils::is_valid_fighter_entry_id,
-};
+use crate::perf_scaler::utils::is_valid_fighter_entry_id;
 
 static mut GIGAFLARE_ACTIVE: [bool; 8] = [false; 8];
 
@@ -45,12 +43,12 @@ unsafe extern "C" fn sephiroth_fighter_frame(fighter: &mut L2CFighterCommon) {
         if !gigaflare_active {
             GIGAFLARE_ACTIVE[entry_id as usize] = true;
             println!("[SEPHIROTH_DRS] intensive_frame_start");
-            push_dynamic_res_report();
+            ultelier::sync_guest::push_dynamic_res_report();
         }
     } else if gigaflare_active {
         GIGAFLARE_ACTIVE[entry_id as usize] = false;
         println!("[SEPHIROTH_DRS] intensive_frame_end");
-        pop_dynamic_res_report();
+        ultelier::sync_guest::pop_dynamic_res_report();
     }
 }
 

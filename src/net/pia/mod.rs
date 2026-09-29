@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use arc_swap::ArcSwap;
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
+use zerocopy::IntoBytes;
 
 use ssbu_pia_interface::{
     self, ConnectedStation, ConnectionChangedEvent, StationConnectionManager,
@@ -18,13 +18,13 @@ use crate::{
     render::profile::{RenderProfile, RenderProfileManager, RenderProfileSettings},
 };
 
-const PIA_CUSTOM_COMMS_VERSION: u8 = 3;
+mod version;
 
-#[derive(Debug)]
-enum PiaCommsError {
-    VersionMismatch,
-    InvalidData,
-}
+use version::CURRENT_VERSION;
+
+/// Current wire-format packet, re-exported from [`version`]. All non-parsing
+/// code in this module deals exclusively with this type.
+type PiaCustomNetPacket = version::PiaPacket;
 
 static CONNECTED_STATION_TABLE_SYNCED_INTERNAL: LazyLock<Mutex<Vec<StationNetInfo>>> =
     LazyLock::new(|| Mutex::new(Vec::with_capacity(8)));
@@ -50,14 +50,6 @@ impl Clone for StationNetInfo {
             ),
         }
     }
-}
-
-#[repr(C, packed)]
-#[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Unaligned, Debug)]
-struct PiaCustomNetPacket {
-    version: u8,
-    latency_bits: u8,
-    render_profile_settings_bits: u16,
 }
 
 pub trait StationExt {
@@ -94,21 +86,6 @@ impl StationExt for ConnectedStation {
         self.get_render_profile_settings()
             .map(|rps| RenderProfile::from_settings(&rps))
     }
-}
-
-fn normalize_and_parse_data(data: &[u8]) -> Result<PiaCustomNetPacket, PiaCommsError> {
-    let mut data = match PiaCustomNetPacket::read_from_bytes(data) {
-        Ok(data) => data,
-        Err(_) => return Err(PiaCommsError::InvalidData),
-    };
-    if data.version == PIA_CUSTOM_COMMS_VERSION {
-        return Ok(data);
-    } else if data.version == 2 {
-        data.render_profile_settings_bits &= !(1 << 14);
-        data.render_profile_settings_bits &= !(1 << 15);
-        return Ok(data);
-    }
-    return Err(PiaCommsError::VersionMismatch);
 }
 
 fn on_station_connection_changed(
@@ -150,7 +127,7 @@ fn send_pia_data_hook(_station: ConnectedStation, data: &mut [u8]) {
     }
     .to_bits();
     let payload = PiaCustomNetPacket {
-        version: PIA_CUSTOM_COMMS_VERSION,
+        version: CURRENT_VERSION,
         latency_bits: latency_bits,
         render_profile_settings_bits: rps_bits,
     };
@@ -161,7 +138,7 @@ fn receive_pia_data_hook(station: ConnectedStation, data: &[u8]) {
     let id = station.get_id();
     let stations_table = CONNECTED_STATION_TABLE_ATOMIC_VIEW.load();
     if let Some(station) = stations_table.iter().find(|s| s.id == id) {
-        match normalize_and_parse_data(data) {
+        match version::decode(data) {
             Ok(d) => {
                 station.is_valid_comms.store(true, Ordering::SeqCst);
                 station.latency_bits.store(d.latency_bits, Ordering::SeqCst);

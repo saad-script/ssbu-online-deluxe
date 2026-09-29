@@ -11,9 +11,7 @@ use smashline::{
     *,
 };
 
-use crate::perf_scaler::{
-    pop_dynamic_res_report, push_dynamic_res_report, utils::is_valid_fighter_entry_id,
-};
+use crate::perf_scaler::utils::is_valid_fighter_entry_id;
 
 const CRITICAL_HIT_FINISH_COOLDOWN_FRAMES: i8 = 7;
 static CRITICAL_HIT_ACTIVE: [AtomicBool; 8] = [const { AtomicBool::new(false) }; 8];
@@ -56,7 +54,7 @@ unsafe extern "C" fn global_critical_hit_fighter_frame(fighter: &mut L2CFighterC
             cooldown_frames_left
         );
         if cooldown_frames_left <= 0 {
-            pop_dynamic_res_report();
+            ultelier::sync_guest::pop_dynamic_res_report();
             CRITICAL_HIT_ACTIVE[entry_id as usize].store(false, Ordering::SeqCst);
             println!(
                 "[CRITICAL_HIT_DRS] intensive_frame_end entry_id={}",
@@ -100,7 +98,7 @@ unsafe fn fighter_cut_in_start(
             "[CRITICAL_HIT_DRS] intensive_frame_start, entry_id={}",
             entry_id
         );
-        push_dynamic_res_report();
+        ultelier::sync_guest::push_dynamic_res_report();
     }
 }
 

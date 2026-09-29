@@ -2,9 +2,6 @@
 
 A performance and online enhancement mod for **Super Smash Bros. Ultimate** that introduces latency controls, render optimizations, and real-time online information.
 
-
-> ⚠️ SSBU 13.0.5 does **NOT** change how packets are sent, received, or parsed. This mod operates exclusively at the P2P networking layer, meaning it modifies traffic exchanged directly between players. The game server is not involved in this communication and, under normal operation, should have no visibility into what this mod is doing. There is currently no known indication that 13.0.5 introduced additional checks for invalid or modified P2P packet data that could result in a ban. **The risk of using this mod on 13.0.5 is therefore the same as on previous versions.**  
-
 > ⚠️ This is a work in progress. Features and stability may change as development continues.  
 > ⚠️ Use at your own risk. I have been testing this mod online personally without any major issues, but there is still a non-zero risk of a ban. The overclocks are intentionally minimal; however, any hardware damage or account penalties remain your responsibility.  
 
@@ -19,13 +16,14 @@ A performance and online enhancement mod for **Super Smash Bros. Ultimate** that
 
 ## 📦 Installation
 
-> ⚠️ Remove any previous latency slider mod, vsync mod, and less lag mod before proceeding with the installation steps!
+- ⚠️ Remove any previous latency slider mod, vsync mod, and less lag mod before proceeding with the installation steps!  
+- ⚠️ Delete the old overclocker files: `sd:/atmosphere/contents/00FF0000A11CE0FF/` and `libnx_over.nro` skyline plugin.  
 
 ### Manual Installation
 
-- Ensure you have these prerequisite installed on your switch/emulator:
-  - ~~[skyline](https://github.com/skyline-dev/skyline/releases)~~
-    - ⚠️ The latest version causes crashes. Use the version bundled into the ssbu-online-deluxe release zip.
+- Ensure you have these prerequisites installed on your switch/emulator:
+  - [Horizon-OC](https://github.com/Horizon-OC/Horizon-OC/releases) (switch only, not needed on emulator)
+  - [skyline](https://github.com/skyline-dev/skyline/releases)
   - [arcropolis](https://github.com/raytwo/arcropolis/releases)
   - [nro-hook](https://github.com/ultimate-research/nro-hook-plugin/releases)
   - [smashline](https://github.com/HDR-Development/smashline/releases)
@@ -51,17 +49,26 @@ Emulator:
 
 ### Verify
 
-Verify that your sdcard directory strucure looks like this on your switch or emulator:
+Verify that your sdcard directory structure looks like this on your switch or emulator:
+Anything marked with `*` is not needed on emulator.
 
 ```
 `sdcard/` (or `sdmc/` on emulator)
 │
 ├── atmosphere/
 │   └── contents/
-│       ├── 00FF0000A11CE0FF/
-│       │   ├── exefs.nsp
-│       │   └── flags/
-│       │       └── boot2.flag
+│       ├── *exosphere.bin
+│       ├── *kips/
+│       │    └── *hoc.kip
+│       ├── *00FF0000636C6BFF/
+│       │    ├── *exefs.nsp
+│       │    ├── *toolbox.json
+│       │    └── *flags/
+│       │        └── *boot2.flag
+│       ├── *00FF0000BEEFB001/
+│       │    ├── *exefs.nsp
+│       │    └── *flags/
+│       │         └── *boot2.flag
 │       └── 01006A800016E000/
 │           ├── exefs/
 │           │   ├── main.npdm
@@ -72,25 +79,23 @@ Verify that your sdcard directory strucure looks like this on your switch or emu
 │                       ├── libarcropolis.nro
 │                       ├── libimgui_smash.nro
 │                       ├── libnro_hook.nro
-│                       ├── libnx_over.nro
 │                       ├── libsmashline_plugin.nro
+│                       ├── *libssbuoc_bridge.nro
+│                       ├── libssbusync.nro
 │                       ├── libssbu_online_deluxe.nro
-│                       ├── libssbu_pia_manager.nro
-│                       └── libssbusync.nro
-│
+│                       └── libssbu_pia_manager.nro
+└
 ```
 
 ## 🎮 Controls
 
 ### Native UI (Online Character Select Screen and Online Arena)
 
-> Note: `All Shoulder Buttons` = `L + R + Z` on gamecube controller, `ZL + ZR + L + R` on procontroller
-
 - On the character select screen or online arena:
   - `D-pad Left/Right`: Select network latency
   - `D-pad Up/Down`: Select render profile
-  - `All Shoulder Buttons + X`: Toggle FPS Boost Mode (AKA FPS++ mode)
-  - `All Shoulder Buttons + Y`: Toggle Streamer Mode (show/hide custom native ui)
+  - `L + R + X`: Toggle FPS Boost Mode (AKA FPS++ mode)
+  - `L + R + Y`: Toggle Streamer Mode (show/hide custom native ui)
 
 - On the character select screen (more than one opponent):
   - `Left Trigger + Right Trigger + Dpad Left/Right`: Cycle between which opponent's network info to show
@@ -99,13 +104,13 @@ See 'Features' section below to see what these options do
 
 ### Overlay UI (Optional)
 
-- `Left Trigger + Right Trigger + D-Pad Down` → Cycle between current window mode
-  - Window Modes: `Hidden`, `Full Info`, `Performance Info`
+- `L + R + D-Pad Right` → Cycle between current window mode
+  - Window Modes: `Hidden`, `Full Info`, `Performance Info`, `Debug Info`
   - In `Full Info Mode`:
     - `D-Pad Up / Down` → Select row
     - `D-Pad Left / Right` → Change value
     - While row `NetProfile` is selected:
-      - `All Shoulder Buttons + X`: Toggle FPS Boost mode (AKA FPS++ mode)
+      - `L + R + X`: Toggle FPS Boost mode (AKA FPS++ mode)
 
 See 'Features' section below to see what these options do
 
@@ -171,24 +176,63 @@ Best profile for doubles:
 You can specify a config file in `sd/ultimate/ssbu_online_deluxe/config.toml`
 - This will allow you to set the profile to use in the menu, and offline singles/doubles matches
 - Add '++' at the end of the profile name to enable fps boost mode (emulator only)
-- If you already have an overclock sysmodule, and dont want to conflict with or use ssbu-online-deluxe's built in overclocker:
+- SSBU Online Deluxe interfaces with the official Horizon OC. If you dont want it do that (for example run another overclocker):
   - Set `overclocker = false` in config file
-  - Delete `libnx_over.nro` plugin file
-  - Delete `atmosphere/contents/00FF0000A11CE0FF/` sysmodule folder
+  - Delete `atmosphere/contents/00FF0000BEEFB001/` sysmodule folder
   - Restart switch
 - All fields are optional. If you dont specify a field, it will use the default/recommended value.
 
 Example `config.toml`:
 ```
+[render_config]
 overclocker = true                          # Set to 'false' if you are using your own overclock sysmodule
 
-[render_profile_config]
+[render_config.render_profile_config]
 menu = "Vanilla"                            # Recommended to keep this on Vanilla always
 offline_match.singles = "Vanilla"           # Applies to offline single matches (1 or 2 players)
 offline_match.doubles = "Vanilla"           # Applies to offline doubles matches (more than 2 players)
 online_match.singles = "LessLagUltra++"     # 'Auto' mode will choose this profile for online single matches
 online_match.doubles = "LessLag"            # 'Auto' mode will choose this profile for online double matches
 ```
+
+### 🎮 Input Keybinding Config (Optional)
+
+You can override the default button combos for the mod's toggle actions by adding a `[key_binding_config]` section to the same `sd/ultimate/ssbu_online_deluxe/config.toml` file. Each field is a `+`-separated combo of button names (case/whitespace insensitive). All fields are optional; unspecified fields fall back to the defaults shown below.
+
+Supported button names: `A`, `B`, `X`, `Y`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `MINUS`, `PLUS`, `START`, `L`, `R`, `ZL`, `ZR`, `Z`, `STICK_L`, `STICK_R`.
+
+Example `config.toml`:
+```
+[key_binding_config]
+toggle_overlay = "L+R+RIGHT"            # Cycle overlay window mode
+toggle_fps_boost = "L+R+ZR+X"           # Toggle FPS Boost (FPS++) Mode in CSS/Arena
+toggle_streamer_mode = "L+R+ZR+Y"       # Toggle Streamer Mode in CSS/Arena
+```
+
+
+#### Per-profile overrides (Advanced)
+
+You can tweak the overclock and resolution that each render profile uses under
+`[render_config.render_profile_config.overrides.<Profile>]`, where `<Profile>` is one of
+`Vanilla`, `LessLag`, `LLUltra`, `LLDoubles`. Anything you don't specify keeps the profile's built-in value.
+
+- `overclock = { cpu = ..., gpu = ..., mem = ... }` (MHz). Console only, requires `overclocker = true`.
+  Applied whenever a match is active with that profile selected. Only use clocks your console is known to handle.
+- `default_resolution`: the base render resolution.
+- `dynamic_resolution`: the resolution used during heavy moves (zoom-ins, gigaflare, ...). Use `"none"` to disable dynamic resolution for that profile.
+- Valid resolutions: `"1920x1080"`, `"1600x900"`, `"1280x720"`, `"1024x576"`, `"854x480"` (or `"1080p"`, `"900p"`, `"720p"`, `"576p"`, `"480p"`).
+
+```
+[render_config.render_profile_config.overrides.LLUltra]
+overclock = { cpu = 1785, gpu = 921, mem = 1833 }
+default_resolution = "576p"
+dynamic_resolution = "480p"
+
+[render_config.render_profile_config.overrides.LessLag]
+dynamic_resolution = "none"                 # Keep 1080p even during heavy moves
+```
+
+> If you're interested in optimizing `LLUltra` and removing stutters, check out the [Advanced Overclocking Guide](Advanced_OC_Guide.md).
 
 ## 📝 Notes and Contribution
 

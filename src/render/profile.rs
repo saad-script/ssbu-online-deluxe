@@ -2,11 +2,13 @@ use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use serde::{de::IntoDeserializer, Deserialize, Deserializer};
 use ssbu_pia_interface::StationConnectionManager;
-use ultelier::sync_guest::{self, BufferMode, IndexMode, OverclockProfile, ResolutionLevel};
+use ultelier::sync_guest::{
+    self, BufferMode, IndexMode, OverclockConfig, OverclockProfile, ResolutionLevel,
+};
 
 use crate::{
     input::InputSnapshot,
-    net::{get_match_status, is_connected, is_in_game, is_valid_online_mode, MatchStatus},
+    net::{get_match_status, is_connected, is_valid_online_mode, MatchStatus},
     utils::is_emulator,
     CONFIG,
 };
@@ -20,6 +22,102 @@ pub struct RenderProfileConfig {
     pub menu: RenderProfile,
     pub offline_match: OfflineMatchRenderProfiles,
     pub online_match: OnlineMatchRenderProfiles,
+    pub overrides: RenderProfileOverrides,
+}
+
+/// Per-preset overrides. Any field left unspecified inherits the preset's
+/// built-in value.
+#[repr(C)]
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(default)]
+pub struct RenderProfileOverrides {
+    #[serde(alias = "Vanilla")]
+    pub vanilla: RenderProfileOverride,
+    #[serde(alias = "LessLag")]
+    pub less_lag: RenderProfileOverride,
+    #[serde(alias = "LessLagUltra", alias = "LLUltra")]
+    pub less_lag_ultra: RenderProfileOverride,
+    #[serde(alias = "LessLagDoubles", alias = "LLDoubles")]
+    pub less_lag_doubles: RenderProfileOverride,
+}
+
+impl RenderProfileOverrides {
+    pub fn for_preset(&self, preset: RenderProfilePreset) -> Option<&RenderProfileOverride> {
+        match preset {
+            RenderProfilePreset::Vanilla => Some(&self.vanilla),
+            RenderProfilePreset::LessLag => Some(&self.less_lag),
+            RenderProfilePreset::LessLagUltra => Some(&self.less_lag_ultra),
+            RenderProfilePreset::LessLagDoubles => Some(&self.less_lag_doubles),
+            RenderProfilePreset::Custom => None,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[serde(default)]
+pub struct RenderProfileOverride {
+    /// Overclock (MHz). Only applied on console with `overclocker = true`.
+    pub overclock: Option<OverclockOverride>,
+    /// Base render resolution, e.g. `"1280x720"`.
+    pub default_resolution: Option<ResolutionSetting>,
+    /// Resolution used during heavy moves, e.g. `"854x480"`, or `"none"` to disable.
+    pub dynamic_resolution: Option<ResolutionSetting>,
+}
+
+#[repr(C)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct OverclockOverride {
+    pub cpu: u32,
+    pub gpu: u32,
+    pub mem: u32,
+}
+
+impl From<OverclockOverride> for OverclockProfile {
+    fn from(oc: OverclockOverride) -> Self {
+        OverclockProfile::Custom(OverclockConfig::new(oc.cpu, oc.gpu, oc.mem))
+    }
+}
+
+/// A resolution level as written in the config file (`"1920x1080"`, `"720p"`, `"none"`, ...).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolutionSetting {
+    Level(ResolutionLevel),
+    None,
+}
+
+impl ResolutionSetting {
+    pub fn level(self) -> Option<ResolutionLevel> {
+        match self {
+            Self::Level(l) => Some(l),
+            Self::None => None,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ResolutionSetting {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let s = s.trim().to_ascii_lowercase();
+        let setting = match s.as_str() {
+            "none" | "off" | "disabled" => Self::None,
+            "1920x1080" | "1080p" => Self::Level(ResolutionLevel::Res1920x1080),
+            "1600x900" | "900p" => Self::Level(ResolutionLevel::Res1600x900),
+            "1280x720" | "720p" => Self::Level(ResolutionLevel::Res1280x720),
+            "1024x576" | "576p" => Self::Level(ResolutionLevel::Res1024x576),
+            "854x480" | "480p" => Self::Level(ResolutionLevel::Res854x480),
+            other => {
+                return Err(serde::de::Error::custom(format!(
+                    "invalid resolution '{other}'; expected one of 1920x1080, 1600x900, 1280x720, 1024x576, 854x480, none"
+                )))
+            }
+        };
+        Ok(setting)
+    }
 }
 
 trait MatchRenderProfiles {
@@ -184,7 +282,7 @@ pub struct RenderProfileSettings {
     buffer_mode: BufferMode,
     index_mode: IndexMode,
     default_resolution_level: ResolutionLevel,
-    dynamic_res_enabled: bool,
+    dynamic_resolution_level: Option<ResolutionLevel>,
     vsync_enabled: bool,
     render_opts_enabled: bool,
     boost_enabled: bool,
@@ -196,46 +294,55 @@ impl RenderProfileSettings {
             buffer_mode: BufferMode::Triple,
             index_mode: IndexMode::TwoBehind,
             default_resolution_level: ResolutionLevel::Res1920x1080,
-            dynamic_res_enabled: false,
+            dynamic_resolution_level: None,
             vsync_enabled: true,
             render_opts_enabled: false,
             boost_enabled: false,
         }
     }
     pub fn less_lag() -> Self {
-        let is_emulator = is_emulator();
+        let dynamic_res_level = match is_emulator() {
+            true => None,
+            false => Some(ResolutionLevel::Res1280x720),
+        };
         RenderProfileSettings {
             buffer_mode: BufferMode::Double,
             index_mode: IndexMode::OneBehind,
             default_resolution_level: ResolutionLevel::Res1920x1080,
-            dynamic_res_enabled: !is_emulator,
+            dynamic_resolution_level: dynamic_res_level,
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
         }
     }
     pub fn less_lag_ultra() -> Self {
-        let is_emulator = is_emulator();
-        let default_res = match is_emulator {
-            true => ResolutionLevel::Res1920x1080,
-            false => ResolutionLevel::Res1024x576,
+        let (default_res_level, dynamic_res_level) = match is_emulator() {
+            true => (ResolutionLevel::Res1920x1080, None),
+            false => (
+                ResolutionLevel::Res1024x576,
+                Some(ResolutionLevel::Res854x480),
+            ),
         };
         RenderProfileSettings {
             buffer_mode: BufferMode::Double,
             index_mode: IndexMode::Immediate,
-            default_resolution_level: default_res,
-            dynamic_res_enabled: !is_emulator,
+            default_resolution_level: default_res_level,
+            dynamic_resolution_level: dynamic_res_level,
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
         }
     }
     pub fn less_lag_doubles() -> Self {
+        let dynamic_res_level = match is_emulator() {
+            true => None,
+            false => Some(ResolutionLevel::Res1280x720),
+        };
         RenderProfileSettings {
             buffer_mode: BufferMode::Triple,
             index_mode: IndexMode::OneBehind,
             default_resolution_level: ResolutionLevel::Res1920x1080,
-            dynamic_res_enabled: true,
+            dynamic_resolution_level: dynamic_res_level,
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
@@ -250,44 +357,86 @@ impl RenderProfileSettings {
             _ => panic!("Must specific a valid render profile"),
         };
         rps.boost_enabled = rp.boost_enabled();
+
+        // layer resolution overrides from config on top of the preset
+        let rc = &CONFIG.load().render_config;
+        if let Some(ov) = rc.render_profile_config.overrides.for_preset(rp.preset) {
+            if let Some(default_res) = ov.default_resolution.and_then(|r| r.level()) {
+                rps.default_resolution_level = default_res;
+            }
+            if let Some(dynamic_res) = ov.dynamic_resolution {
+                rps.dynamic_resolution_level = dynamic_res.level();
+            }
+        }
         rps
     }
     pub fn from_env() -> Self {
         RenderProfileSettings {
-            buffer_mode: sync_guest::buffer_mode()
-                .flatten()
-                .unwrap_or(BufferMode::Triple),
-            index_mode: sync_guest::index_mode()
-                .flatten()
-                .unwrap_or(IndexMode::TwoBehind),
-            default_resolution_level: sync_guest::default_game_resolution_level()
-                .flatten()
+            buffer_mode: sync_guest::buffer_mode().unwrap_or(BufferMode::Triple),
+            index_mode: sync_guest::index_mode().unwrap_or(IndexMode::TwoBehind),
+            default_resolution_level: sync_guest::default_resolution_level()
                 .unwrap_or(ResolutionLevel::Res1920x1080),
-            dynamic_res_enabled: sync_guest::dynamic_resolution_enabled().unwrap_or(false),
+            dynamic_resolution_level: sync_guest::dynamic_resolution_level().unwrap_or(None),
             vsync_enabled: sync_guest::vsync_enabled().unwrap_or(true),
             render_opts_enabled: sync_guest::render_opts_enabled().unwrap_or(false),
             boost_enabled: sync_guest::fps_boost_enabled().unwrap_or(false),
         }
     }
+    // Bit layout (must match between `to_bits` and `from_bits`):
+    //   [ 0.. 2)  buffer_mode              (2 bits)
+    //   [ 2.. 4)  index_mode               (2 bits)
+    //   [ 4.. 8)  default_resolution_level (4 bits)
+    //   [ 8..12)  dynamic_resolution_level (4 bits; sentinel 0xF == None)
+    //   [12..13)  vsync_enabled            (1 bit)
+    //   [13..14)  render_opts_enabled      (1 bit)
+    //   [14..15)  boost_enabled            (1 bit)
+    const BUFFER_MODE_SHIFT: u16 = 0;
+    const BUFFER_MODE_MASK: u16 = 0b11;
+    const INDEX_MODE_SHIFT: u16 = 2;
+    const INDEX_MODE_MASK: u16 = 0b11;
+    const DEFAULT_RES_SHIFT: u16 = 4;
+    const DEFAULT_RES_MASK: u16 = 0xF;
+    const DYNAMIC_RES_SHIFT: u16 = 8;
+    const DYNAMIC_RES_MASK: u16 = 0xF;
+    const DYNAMIC_RES_NONE: u16 = 0xF;
+    const VSYNC_SHIFT: u16 = 12;
+    const RENDER_OPTS_SHIFT: u16 = 13;
+    const BOOST_SHIFT: u16 = 14;
+
     pub fn from_bits(bits: u16) -> Option<Self> {
         Some(Self {
-            buffer_mode: BufferMode::from_u32((bits & 0b11) as u32)?,
-            index_mode: IndexMode::from_u32(((bits >> 2) & 0b11) as u32)?,
-            default_resolution_level: ResolutionLevel::from_u32(((bits >> 4) & 0x7f) as u32)?,
-            dynamic_res_enabled: ((bits >> 11) & 1) != 0,
-            vsync_enabled: ((bits >> 12) & 1) != 0,
-            render_opts_enabled: ((bits >> 13) & 1) != 0,
-            boost_enabled: ((bits >> 14) & 1) != 0,
+            buffer_mode: BufferMode::from_u32(
+                ((bits >> Self::BUFFER_MODE_SHIFT) & Self::BUFFER_MODE_MASK) as u32,
+            )?,
+            index_mode: IndexMode::from_u32(
+                ((bits >> Self::INDEX_MODE_SHIFT) & Self::INDEX_MODE_MASK) as u32,
+            )?,
+            default_resolution_level: ResolutionLevel::from_u32(
+                ((bits >> Self::DEFAULT_RES_SHIFT) & Self::DEFAULT_RES_MASK) as u32,
+            )?,
+            dynamic_resolution_level: ResolutionLevel::from_u32(
+                ((bits >> Self::DYNAMIC_RES_SHIFT) & Self::DYNAMIC_RES_MASK) as u32,
+            ),
+            vsync_enabled: ((bits >> Self::VSYNC_SHIFT) & 1) != 0,
+            render_opts_enabled: ((bits >> Self::RENDER_OPTS_SHIFT) & 1) != 0,
+            boost_enabled: ((bits >> Self::BOOST_SHIFT) & 1) != 0,
         })
     }
     pub const fn to_bits(&self) -> u16 {
-        (self.buffer_mode as u16)
-            | ((self.index_mode as u16) << 2)
-            | ((self.default_resolution_level as u16) << 4)
-            | ((self.dynamic_res_enabled as u16) << 11)
-            | ((self.vsync_enabled as u16) << 12)
-            | ((self.render_opts_enabled as u16) << 13)
-            | ((self.boost_enabled as u16) << 14)
+        let dynamic_res_level: u16 = if let Some(l) = self.dynamic_resolution_level {
+            (l as u16) & Self::DYNAMIC_RES_MASK
+        } else {
+            Self::DYNAMIC_RES_NONE
+        };
+
+        (((self.buffer_mode as u16) & Self::BUFFER_MODE_MASK) << Self::BUFFER_MODE_SHIFT)
+            | (((self.index_mode as u16) & Self::INDEX_MODE_MASK) << Self::INDEX_MODE_SHIFT)
+            | (((self.default_resolution_level as u16) & Self::DEFAULT_RES_MASK)
+                << Self::DEFAULT_RES_SHIFT)
+            | (dynamic_res_level << Self::DYNAMIC_RES_SHIFT)
+            | ((self.vsync_enabled as u16) << Self::VSYNC_SHIFT)
+            | ((self.render_opts_enabled as u16) << Self::RENDER_OPTS_SHIFT)
+            | ((self.boost_enabled as u16) << Self::BOOST_SHIFT)
     }
 
     #[allow(dead_code)]
@@ -303,8 +452,8 @@ impl RenderProfileSettings {
         self.default_resolution_level
     }
     #[allow(dead_code)]
-    pub fn dynamic_res_enabled(&self) -> bool {
-        self.dynamic_res_enabled
+    pub fn dynamic_resolution_level(&self) -> Option<ResolutionLevel> {
+        self.dynamic_resolution_level
     }
     #[allow(dead_code)]
     pub fn vsync_enabled(&self) -> bool {
@@ -492,8 +641,8 @@ impl RenderProfileManager {
         let is_emulator = is_emulator();
 
         // apply resolution
-        let _ = sync_guest::set_default_game_resolution_level(rps.default_resolution_level);
-        let _ = sync_guest::set_dynamic_resolution_enabled(rps.dynamic_res_enabled);
+        let _ = sync_guest::set_default_resolution_level(rps.default_resolution_level);
+        let _ = sync_guest::set_dynamic_resolution_level(rps.dynamic_resolution_level);
 
         // apply render options
         if let Some(env_flags) = sync_guest::env_flags() {
@@ -524,12 +673,17 @@ impl RenderProfileManager {
         // set overclock profile
         let rc = &CONFIG.load().render_config;
         if rc.overclocker && !is_emulator {
-            let oc_profile = match (
-                RenderProfile::from_settings(&rps).preset,
-                get_match_status(),
-            ) {
-                (RenderProfilePreset::Vanilla, _) => None,
+            let preset = RenderProfile::from_settings(&rps).preset;
+            let oc_override = rc
+                .render_profile_config
+                .overrides
+                .for_preset(preset)
+                .and_then(|ov| ov.overclock);
+            let oc_profile = match (preset, get_match_status()) {
                 (_, MatchStatus::Inactive) => None,
+                // config override takes priority over the built-in mapping
+                (_, _) if oc_override.is_some() => oc_override.map(OverclockProfile::from),
+                (RenderProfilePreset::Vanilla, _) => None,
                 (RenderProfilePreset::LessLagUltra, _) => Some(OverclockProfile::PerformanceFfa),
                 (
                     RenderProfilePreset::LessLag

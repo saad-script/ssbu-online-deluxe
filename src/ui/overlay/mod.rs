@@ -17,7 +17,7 @@ use ultelier::sync_guest::{self, BufferMode, IndexMode, ResolutionLevel};
 static IMGUI_EMPTY_CELL_STR: &str = "---\0";
 static IMGUI_INTERACT_TABLE_ROW_NAME_STRS: [&str; 4] =
     ["Name\0", "Ping\0", "NetLatency\0", "NetProfile\0"];
-static IMGUI_WINDOW_TITLE: &str = "Player Info\0";
+static IMGUI_WINDOW_TITLE: &str = "SSBU Online Deluxe\0";
 static IMGUI_HIDDEN_WINDOW_TITLE: &str = "##overlay_hidden\0";
 static IMGUI_PLAYER_NAME: &str = "You\0";
 static IMGUI_TABLE_ID: &str = "conn_player_info\0";
@@ -538,34 +538,30 @@ unsafe fn draw_debug_table(first_col_width: f32) {
         "BufferMode\0",
         Some(format!(
             "{:?}",
-            sync_guest::buffer_mode()
-                .flatten()
-                .unwrap_or(BufferMode::Triple)
+            sync_guest::buffer_mode().unwrap_or(BufferMode::Triple)
         )),
     );
     draw_row_str(
         "IndexMode\0",
         Some(format!(
             "{:?}",
-            sync_guest::index_mode()
-                .flatten()
-                .unwrap_or(IndexMode::TwoBehind)
+            sync_guest::index_mode().unwrap_or(IndexMode::TwoBehind)
         )),
     );
-    let default_res = sync_guest::default_game_resolution_level()
-        .flatten()
-        .unwrap_or(ResolutionLevel::Res1920x1080);
-    let (w, h) = default_res.to_values();
+    let default_res =
+        sync_guest::default_resolution_level().unwrap_or(ResolutionLevel::Res1920x1080);
+    let (def_w, def_h) = default_res.to_values();
     draw_row_bool("Vsync\0", sync_guest::vsync_enabled().unwrap_or(false));
     draw_row_bool(
         "RenderOpts\0",
         sync_guest::render_opts_enabled().unwrap_or(false),
     );
-    draw_row_bool(
-        "DynamicRes\0",
-        sync_guest::dynamic_resolution_enabled().unwrap_or(false),
-    );
-    draw_row_str("DefaultRes\0", Some(format!("{}x{}", w, h)));
+    let dynamic_res = sync_guest::dynamic_resolution_level()
+        .flatten()
+        .map(|r| r.to_values())
+        .map(|(w, h)| format!("{}x{}", w, h));
+    draw_row_str("DynamicRes\0", dynamic_res);
+    draw_row_str("DefaultRes\0", Some(format!("{}x{}", def_w, def_h)));
     igEndTable();
 }
 
