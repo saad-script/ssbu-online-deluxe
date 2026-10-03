@@ -1,9 +1,12 @@
 # SSBU Online Deluxe — LLUltra Advanced Optimization Guide
 
-This guide is primarily intended for users who want to use the **LLUltra profile on a Nintendo Switch**. It aims to resolve **LLUltra stutters and frame drops that occur on real hardware**.
+This guide is for players who want to use the **LLUltra profile on real Nintendo Switch hardware**. It walks through the settings needed to get the best LLUltra experience and to **eliminate the stutters and frame drops that can occur on console**.
 
-> **Note:** Ignore this guide if you use another profile like **LessLag** or play on an **emulator**.  
-> ⚠️ Use at your own risk. The overclocks mentioned here are intentionally minimal and should be safe. However, overclocking by nature carries an inherent risk. The level of risk is dependent on how much you overclock and stay within the limits of the chip and the hardware. Any hardware damage remain your responsibility.  
+> **Note:** This guide does not apply to **emulators**.
+
+> ⚠️ **Use at your own risk.** The overclocks in this guide are intentionally conservative and should be safe for nearly all consoles. That said, overclocking always carries some risk, and that risk grows the further you push beyond the hardware's limits. In particular, setting RAM clocks too high can **corrupt your sysNAND/emuNAND**, so **back up your sysNAND/emuNAND before continuing**. You are solely responsible for any damage to your hardware or data.
+
+> ⚠️ **Firmware 23.0.0+ users:** Horizon OC does not yet support the latest Atmosphère. Please wait for a Horizon OC update before following the overclocking steps. In the meantime, you can still complete **Step 3 (Optimizing Controller Polling)**, since it does not depend on Horizon OC.
 
 ## Hardware Differences
 
@@ -98,15 +101,27 @@ Verify your overclock overrides are actually applying in match:
 
 ---
 
-## 3. Optimizing GPU usage (Optional)
+## 3. Optimizing Controller Polling (Highly Recommended)
+
+By default, the Switch polls controllers at 200 Hz (or 125 Hz, depending on the controller). At LLUltra's lower latency, this polling rate can occasionally cause inputs to be dropped during online play.
+
+To fix this, we highly recommend raising the controller polling rate to **1000 Hz**. There are essentially no downsides to doing so.
+
+Follow the instructions here to set your controller polling rate to 1000 Hz:  
+https://github.com/saad-script/hidpoll
+
+---
+
+## 4. Optimizing GPU usage (Optional)
 
 - The steps mentioned above should solve the majority of the stutters you experience on LLUltra.
 - Avoid using stage/skin mods that increase the model details or have higher polycounts. This may cause stutters.
 - On the other hand, if you use stage/skin mods that do the opposite (lower poly count, lower level of detail) it may actually help with performance.
    - For example, unmodded Hollow Bastion causes frame drops on LLUltra due to the background's polycount being too much for the GPU to handle in LLUltra mode. But if you use a stage mode like [Eternal Heart](https://gamebanana.com/mods/384225) which replaces the background, it actually fixes the stutters.
 - Certain effects from certain moves may also cause framedrops and stutters. These moves can also be target with effect mods that replaces or simplifies them. 
+- We may eventually put together a curated list of recommended stage, skin, and effect mods that work well alongside SSBU Online Deluxe.
 
-## 4. Optimizing Temperatures (Optional)
+## 5. Optimizing Temperatures (Optional)
 
 - Generally, speaking anything under SOC temps of 70 degrees celsius is fine.
 - The overclocks mentioned above should keep you well under that threshold.
@@ -116,7 +131,7 @@ Verify your overclock overrides are actually applying in match:
   - Example: Start with `CPU UV = 5`, if the switch crashes or acts unstable, restart, and set it to 4, and continue down until you find a stable value.
   - Undervolting is completely safe. You dont have to worry about damaging hardware.
 
-## 5. Go down the OC Rabbit Hole (Optional, advanced users only)
+## 6. Go down the OC Rabbit Hole (Optional, advanced users only)
 - For those wanting to go further (gpu undervolt, ram latency, etc). You can find more information here:
   - Erista Advanced HOC Setup: https://rentry.co/erista
-  - Mariko Advaned HOC Setup: https://rentry.co/mariko
+  - Mariko Advanced HOC Setup: https://rentry.co/mariko

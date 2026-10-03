@@ -232,7 +232,7 @@ dynamic_resolution = "480p"
 dynamic_resolution = "none"                 # Keep 1080p even during heavy moves
 ```
 
-> If you're interested in optimizing `LLUltra` and removing stutters, check out the [Advanced Overclocking Guide](Advanced_OC_Guide.md).
+> If you're interested in optimizing `LLUltra` and removing stutters, check out the [Advanced LLUltra Optimization Guide](Advanced_LLUltra_Opt_Guide.md).
 
 ## 📝 Notes and Contribution
 
