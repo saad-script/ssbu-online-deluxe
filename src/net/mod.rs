@@ -143,9 +143,9 @@ unsafe fn update_css(arg: u64) {
     call_original!(arg);
 }
 
-#[skyline::hook(offset = 0x25d9288, inline)]
+#[skyline::hook(offset = 0x25d9320, inline)]
 unsafe fn on_stage_presetup(ctx: &InlineCtx) {
-    let stage_base = ctx.registers[0].x();
+    let stage_base = ctx.registers[24].x();
     let stage_id = *((stage_base + 8) as *mut u32);
 
     let is_training_mode = is_training_mode();
