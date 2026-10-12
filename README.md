@@ -12,8 +12,10 @@ A performance and online enhancement mod for **Super Smash Bros. Ultimate** that
 
 - ✔️ Nintendo Switch (console)
 - ✔️ Eden Emulator (requires workaround, see installation section below)
+- ✔️ Citron Emulator
+- ✔️ Nextendo network support (console and supported emulator)
+- ✔️ HDR (HewDrawRemix) support
 - ⚠️ Other emulators: not yet tested (not planned)
-- ⚠️ HDR support not yet tested (planned)
 
 ## 📦 Installation
 
