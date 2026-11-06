@@ -30,14 +30,6 @@ impl Latency {
         self.buffer
             .store((prev_delay - 1).max(VALUE_AUTO), Ordering::SeqCst);
     }
-    pub fn to_bits(&self) -> u8 {
-        self.buffer.load(Ordering::SeqCst) as u8
-    }
-    pub fn from_bits(bits: u8) -> Self {
-        Latency {
-            buffer: AtomicI8::new(bits as i8),
-        }
-    }
     fn ord_key(&self) -> (u8, i16) {
         let value = self.buffer.load(Ordering::SeqCst);
         if value >= 0 {
@@ -100,6 +92,22 @@ impl ToString for Latency {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StationLatency {
+    Manual(u8),
+    Auto(Option<u8>),
+}
+
+impl std::fmt::Display for StationLatency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StationLatency::Manual(frames) => write!(f, "{}f", frames),
+            StationLatency::Auto(None) => write!(f, "Auto"),
+            StationLatency::Auto(Some(frames)) => write!(f, "Auto ({}f)", frames),
+        }
+    }
+}
+
 pub struct LatencySliderManager {
     selected_latency: Latency,
     active_latency: Latency,
@@ -125,6 +133,18 @@ impl LatencySliderManager {
             return None;
         }
         Some(&self.active_latency)
+    }
+    pub fn station_latency(&self) -> StationLatency {
+        let buffer = self
+            .active_latency()
+            .unwrap_or(&self.selected_latency)
+            .buffer
+            .load(Ordering::SeqCst);
+        let last_auto = LAST_AUTO.load(Ordering::SeqCst);
+        match buffer >= 0 {
+            true => StationLatency::Manual(buffer as u8),
+            false => StationLatency::Auto((last_auto >= 0).then_some(last_auto as u8)),
+        }
     }
     pub fn poll(
         &self,

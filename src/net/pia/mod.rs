@@ -1,90 +1,59 @@
-use std::sync::{
-    atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering},
-    Arc, LazyLock, Mutex,
-};
+use std::{sync::LazyLock, time::Duration};
 
 use arc_swap::ArcSwap;
 use zerocopy::IntoBytes;
 
 use ssbu_pia_interface::{
-    self, ConnectedStation, ConnectionChangedEvent, StationConnectionManager,
+    self, Channel, ConnectedStation, ConnectionChangedEvent, StationConnectionManager,
 };
 
 use crate::{
     net::{
         is_in_real_game, is_valid_online_mode,
-        latency_slider::{Latency, LatencySliderManager},
+        latency_slider::{LatencySliderManager, StationLatency},
     },
-    render::profile::{RenderProfile, RenderProfileManager, RenderProfileSettings},
+    render::profile::{RenderProfile, RenderProfileManager},
 };
 
 mod version;
 
-use version::CURRENT_VERSION;
+use version::StationState;
 
-/// Current wire-format packet, re-exported from [`version`]. All non-parsing
-/// code in this module deals exclusively with this type.
 type PiaCustomNetPacket = version::PiaPacket;
 
-static CONNECTED_STATION_TABLE_SYNCED_INTERNAL: LazyLock<Mutex<Vec<StationNetInfo>>> =
-    LazyLock::new(|| Mutex::new(Vec::with_capacity(8)));
-static CONNECTED_STATION_TABLE_ATOMIC_VIEW: LazyLock<ArcSwap<Vec<StationNetInfo>>> =
+const CHANNEL_NAME: &str = "ssbu-online-deluxe";
+const NET_THREAD_TICK: Duration = Duration::from_millis(100);
+const NET_THREAD_PRIORITY: i32 = 24;
+static STATION_TABLE: LazyLock<ArcSwap<Vec<StationNetInfo>>> =
     LazyLock::new(|| ArcSwap::from_pointee(Vec::with_capacity(8)));
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StationNetInfo {
     id: u64,
-    is_valid_comms: AtomicBool,
-    latency_bits: AtomicU8,
-    render_profile_settings_bits: AtomicU16,
+    state: StationState,
 }
 
-impl Clone for StationNetInfo {
-    fn clone(&self) -> Self {
-        StationNetInfo {
-            id: self.id,
-            is_valid_comms: AtomicBool::new(self.is_valid_comms.load(Ordering::SeqCst)),
-            latency_bits: AtomicU8::new(self.latency_bits.load(Ordering::SeqCst)),
-            render_profile_settings_bits: AtomicU16::new(
-                self.render_profile_settings_bits.load(Ordering::SeqCst),
-            ),
-        }
-    }
+fn with_station_state<R>(id: u64, f: impl FnOnce(&StationState) -> R) -> Option<R> {
+    STATION_TABLE
+        .load()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| f(&s.state))
 }
 
 pub trait StationExt {
-    fn get_latency(&self) -> Option<Latency>;
-    fn get_render_profile_settings(&self) -> Option<RenderProfileSettings>;
+    fn get_latency(&self) -> Option<StationLatency>;
     fn get_render_profile(&self) -> Option<RenderProfile>;
 }
 
 impl StationExt for ConnectedStation {
-    fn get_latency(&self) -> Option<Latency> {
-        let id = self.get_id();
-        let stations_table = CONNECTED_STATION_TABLE_ATOMIC_VIEW.load();
-        stations_table
-            .iter()
-            .find(|s| s.id == id && s.is_valid_comms.load(Ordering::SeqCst))
-            .map(|s| Latency::from_bits(s.latency_bits.load(Ordering::SeqCst)))
-    }
-    fn get_render_profile_settings(&self) -> Option<RenderProfileSettings> {
-        if !self.is_modded() {
-            return None;
-        }
-        let id = self.get_id();
-        let stations_table = CONNECTED_STATION_TABLE_ATOMIC_VIEW.load();
-        stations_table
-            .iter()
-            .find(|s| s.id == id && s.is_valid_comms.load(Ordering::SeqCst))
-            .and_then(|s| {
-                RenderProfileSettings::from_bits(
-                    s.render_profile_settings_bits.load(Ordering::SeqCst),
-                )
-            })
+    fn get_latency(&self) -> Option<StationLatency> {
+        with_station_state(self.get_id(), |s| s.latency)
     }
     fn get_render_profile(&self) -> Option<RenderProfile> {
-        self.get_render_profile_settings()
-            .map(|rps| RenderProfile::from_settings(&rps))
+        with_station_state(self.get_id(), |s| {
+            RenderProfile::from_settings(&s.render_profile_settings)
+        })
     }
 }
 
@@ -93,62 +62,88 @@ fn on_station_connection_changed(
     station: ConnectedStation,
     new_num_connected: usize,
 ) {
-    let id = station.get_id();
-    let mut stations_table = CONNECTED_STATION_TABLE_SYNCED_INTERNAL.lock().unwrap();
-    if event == ConnectionChangedEvent::StationConnected {
-        stations_table.push(StationNetInfo {
-            id,
-            is_valid_comms: AtomicBool::new(false),
-            latency_bits: AtomicU8::new(Latency::unknown().to_bits()),
-            render_profile_settings_bits: AtomicU16::new(
-                RenderProfileSettings::vanilla().to_bits(),
-            ),
+    if event == ConnectionChangedEvent::StationDisconnected {
+        let id = station.get_id();
+        STATION_TABLE.rcu(|table| {
+            table
+                .iter()
+                .filter(|s| s.id != id)
+                .cloned()
+                .collect::<Vec<_>>()
         });
-    } else if event == ConnectionChangedEvent::StationDisconnected {
-        if let Some(i) = stations_table.iter().position(|s| s.id == id) {
-            stations_table.remove(i);
+    }
+
+    RenderProfileManager::instance().refresh_profile(is_valid_online_mode(), new_num_connected > 1);
+}
+
+fn receive_station_states(channel: Channel, stations: &[ConnectedStation], buf: &mut [u8]) {
+    let mut received = Vec::new();
+    for station in stations {
+        let mut latest = None;
+        while let Some(len) = station.recv_packet(channel, buf) {
+            match version::decode(&buf[..len]) {
+                Ok(state) => latest = Some(state),
+                Err(e) => println!(
+                    "Error parsing incoming data from station {}: {:?}",
+                    station.get_id(),
+                    e
+                ),
+            }
+        }
+        if let Some(state) = latest {
+            received.push(StationNetInfo {
+                id: station.get_id(),
+                state,
+            });
         }
     }
 
-    CONNECTED_STATION_TABLE_ATOMIC_VIEW.store(Arc::new(stations_table.clone()));
+    let connected_ids: Vec<u64> = stations.iter().map(|s| s.get_id()).collect();
+    let has_stale = STATION_TABLE
+        .load()
+        .iter()
+        .any(|s| !connected_ids.contains(&s.id));
+    if received.is_empty() && !has_stale {
+        return;
+    }
 
-    RenderProfileManager::instance()
-        .auto_select_profile(is_valid_online_mode(), new_num_connected > 1);
+    STATION_TABLE.rcu(|table| {
+        let mut table: Vec<StationNetInfo> = table
+            .iter()
+            .filter(|s| connected_ids.contains(&s.id) && !received.iter().any(|r| r.id == s.id))
+            .cloned()
+            .collect();
+        table.extend(received.iter().cloned());
+        table
+    });
 }
 
-fn send_pia_data_hook(_station: ConnectedStation, data: &mut [u8]) {
-    let latency_bits = LatencySliderManager::instance()
-        .active_latency()
-        .unwrap_or_else(|| LatencySliderManager::instance().selected_latency())
-        .to_bits();
-    let rps_bits = match is_in_real_game() {
+fn send_local_state(channel: Channel, stations: &[ConnectedStation]) {
+    let latency = LatencySliderManager::instance().station_latency();
+    let rps = match is_in_real_game() {
         false => RenderProfileManager::instance().selected_render_profile_settings(),
         true => RenderProfileManager::active_render_profile_settings(),
-    }
-    .to_bits();
-    let payload = PiaCustomNetPacket {
-        version: CURRENT_VERSION,
-        latency_bits: latency_bits,
-        render_profile_settings_bits: rps_bits,
     };
-    data.copy_from_slice(payload.as_bytes());
+    let packet = PiaCustomNetPacket::new(latency, &rps);
+    for station in stations.iter().filter(|s| s.is_modded()) {
+        station.send_packet(channel, packet.as_bytes());
+    }
 }
 
-fn receive_pia_data_hook(station: ConnectedStation, data: &[u8]) {
-    let id = station.get_id();
-    let stations_table = CONNECTED_STATION_TABLE_ATOMIC_VIEW.load();
-    if let Some(station) = stations_table.iter().find(|s| s.id == id) {
-        match version::decode(data) {
-            Ok(d) => {
-                station.is_valid_comms.store(true, Ordering::SeqCst);
-                station.latency_bits.store(d.latency_bits, Ordering::SeqCst);
-                station
-                    .render_profile_settings_bits
-                    .store(d.render_profile_settings_bits, Ordering::SeqCst);
-            }
-            Err(e) => {
-                println!("Error parsing incoming data: {:?}", e);
-            }
+fn net_thread_main(channel: Channel) {
+    unsafe {
+        skyline::nn::os::ChangeThreadPriority(
+            skyline::nn::os::GetCurrentThread(),
+            NET_THREAD_PRIORITY,
+        );
+    }
+    let mut buf = vec![0u8; StationConnectionManager::max_packet_size()];
+    loop {
+        std::thread::sleep(NET_THREAD_TICK);
+        let stations = StationConnectionManager::get_connected_stations();
+        receive_station_states(channel, &stations, &mut buf);
+        if !stations.is_empty() {
+            send_local_state(channel, &stations);
         }
     }
 }
@@ -166,8 +161,20 @@ pub(super) fn install() {
     StationConnectionManager::register_station_connection_changed_callback(
         on_station_connection_changed,
     );
-    StationConnectionManager::register_station_data_send_hook(send_pia_data_hook);
-    StationConnectionManager::register_station_data_received_hook(receive_pia_data_hook);
+
+    match Channel::claim(CHANNEL_NAME) {
+        Some(channel) => {
+            std::thread::Builder::new()
+                .name(String::from("pia-net"))
+                .stack_size(0x10000)
+                .spawn(move || net_thread_main(channel))
+                .expect("Unable to spawn PIA network thread!");
+        }
+        None => println!(
+            "Unable to claim PIA channel '{}', station info will not be exchanged",
+            CHANNEL_NAME
+        ),
+    }
 
     #[cfg(feature = "dummy_connection")]
     ssbu_pia_interface::setup_dummy_connection(dummy_connection_count());

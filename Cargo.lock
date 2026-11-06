@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "acmd-engine"
 version = "0.1.0"
-source = "git+https://github.com/hdr-development/smashline.git#fdc151fcef981b09d4ab4b4ba62ca1a8850022a2"
+source = "git+https://github.com/hdr-development/smashline.git?tag=v2.0.0#642dd1718c8e1a98b700f3b4738defb67e22849b"
 dependencies = [
  "hash40",
  "locks",
@@ -17,9 +17,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c049c0be4daef0b145cb3555416b3b8ef5b7888a38aea1a3a155801fe7b0810b"
+checksum = "380962b3d93b99642e50b9febf72c071e97e8b32d86eae9cf4ef582bb960ae6e"
 dependencies = [
  "rustversion",
 ]
@@ -86,9 +86,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cfg-if"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
 name = "compile-time-lua-bind-hash"
@@ -130,15 +130,15 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.18.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
+checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "equivalent"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
 name = "futures-core"
@@ -205,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.14.1"
+version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07aa2048142242915a31d35844fb311e0e53fcca590c3a0a40dcf1b841fa09eb"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -221,9 +221,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "js-sys"
-version = "0.3.104"
+version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0c1080212aad755ea003d18543e8768dd432c48819efd73a7bf1e39b7a5a3a"
+checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -232,15 +232,15 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "libc"
-version = "0.2.189"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "libc-nnsdk"
@@ -256,17 +256,17 @@ checksum = "1256a11d163c7288d94909f8120ede53294d8c233df314b0e4f01cf0269707da"
 
 [[package]]
 name = "locks"
-version = "1.6.7"
-source = "git+https://github.com/hdr-development/smashline.git#fdc151fcef981b09d4ab4b4ba62ca1a8850022a2"
+version = "2.0.0"
+source = "git+https://github.com/hdr-development/smashline.git?tag=v2.0.0#642dd1718c8e1a98b700f3b4738defb67e22849b"
 dependencies = [
  "skyline",
 ]
 
 [[package]]
 name = "log"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lua_bind_hash"
@@ -290,17 +290,17 @@ dependencies = [
 
 [[package]]
 name = "nnsdk"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27692267bad39aba64dd4549de1ec63a22e41b6dd6b5ec99c7bf6dba175a14bd"
+checksum = "26aa8c57f278ea8e9158530faf0154ee253fe2ed49383730878d62175ace86a3"
 dependencies = [
  "libc-nnsdk 0.5.0",
 ]
 
 [[package]]
 name = "nnsdk"
-version = "0.6.1"
-source = "git+https://github.com/ultimate-research/nnsdk-rs#ca3f1e3fa3fb16209f8407795772ea7245440c38"
+version = "0.6.2"
+source = "git+https://github.com/ultimate-research/nnsdk-rs#d23f131663ec72a87c84914e6e738999f3ab403d"
 dependencies = [
  "libc-nnsdk 0.5.0",
 ]
@@ -420,14 +420,14 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "serde_json"
-version = "1.0.151"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
  "itoa",
  "memchr",
@@ -438,9 +438,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
+checksum = "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c"
 dependencies = [
  "serde_core",
 ]
@@ -451,7 +451,7 @@ version = "0.6.0"
 source = "git+https://github.com/ultimate-research/skyline-rs.git#6b52d321275639f26c2371d8142550ba0013a5e4"
 dependencies = [
  "libc-nnsdk 0.5.0",
- "nnsdk 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nnsdk 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "skyline_macro",
 ]
 
@@ -469,12 +469,12 @@ dependencies = [
 [[package]]
 name = "skyline_smash"
 version = "0.1.0"
-source = "git+https://github.com/ultimate-research/skyline-smash#315e4e8bebb460ebb9f02f30f07b0f13883ba3d6"
+source = "git+https://github.com/ultimate-research/skyline-smash#d2ca90d9ecffdf9bf58efe6bcf4dd49f62ea1435"
 dependencies = [
  "compile-time-lua-bind-hash",
  "lazy_static",
  "libc-nnsdk 0.4.0",
- "nnsdk 0.6.1 (git+https://github.com/ultimate-research/nnsdk-rs)",
+ "nnsdk 0.6.2 (git+https://github.com/ultimate-research/nnsdk-rs)",
  "paste",
  "skyline",
 ]
@@ -487,14 +487,14 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.0"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "smashline"
 version = "0.1.0"
-source = "git+https://github.com/hdr-development/smashline.git#fdc151fcef981b09d4ab4b4ba62ca1a8850022a2"
+source = "git+https://github.com/hdr-development/smashline.git?tag=v2.0.0#642dd1718c8e1a98b700f3b4738defb67e22849b"
 dependencies = [
  "acmd-engine",
  "locks",
@@ -506,7 +506,7 @@ dependencies = [
 [[package]]
 name = "smashline-macro"
 version = "0.1.0"
-source = "git+https://github.com/hdr-development/smashline.git#fdc151fcef981b09d4ab4b4ba62ca1a8850022a2"
+source = "git+https://github.com/hdr-development/smashline.git?tag=v2.0.0#642dd1718c8e1a98b700f3b4738defb67e22849b"
 dependencies = [
  "proc-macro-crate",
  "proc-macro-error",
@@ -535,8 +535,8 @@ dependencies = [
 
 [[package]]
 name = "ssbu-pia-interface"
-version = "1.3.0"
-source = "git+https://github.com/project-ultelier/ssbu-pia-interface.git#220b5aac0e66e5c577403e836ed296b06697dc07"
+version = "2.0.0"
+source = "git+https://github.com/project-ultelier/ssbu-pia-interface.git#8903c32f8ac13adedc8fed3f9bde1fb56ac29ac8"
 dependencies = [
  "smallvec",
 ]
@@ -544,6 +544,7 @@ dependencies = [
 [[package]]
 name = "ssbusync-guest"
 version = "2.0.0"
+source = "git+https://github.com/project-ultelier/smash-ultelier.git#9762f7736dc445495f872663cc3cc034a27d7744"
 dependencies = [
  "skyline",
  "ultelier-macros",
@@ -573,9 +574,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.5"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -604,17 +605,17 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.5+spec-1.1.0"
+version = "1.2.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12c0ba9680044b4ce98d391a62094047eada0d64860b80166c39f4a6b5640785"
+checksum = "c5ffcdf8f50436dbbfd675c1fe1b8e0854f42b7defea8584bdebe1aee900e561"
 dependencies = [
  "indexmap",
  "serde_core",
  "serde_spanned",
- "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_datetime 1.1.2+spec-1.1.0",
  "toml_parser",
  "toml_writer",
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]
 
 [[package]]
@@ -625,9 +626,9 @@ checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
 
 [[package]]
 name = "toml_datetime"
-version = "1.1.1+spec-1.1.0"
+version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
+checksum = "2b86d767906c6c42421dcba507eb9d203e779497710a47782a224bb871653053"
 dependencies = [
  "serde_core",
 ]
@@ -645,22 +646,23 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.1.3+spec-1.1.0"
+version = "1.1.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
+checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]
 
 [[package]]
 name = "toml_writer"
-version = "1.1.2+spec-1.1.0"
+version = "1.2.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
+checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "ultelier"
 version = "2.0.0"
+source = "git+https://github.com/project-ultelier/smash-ultelier.git#9762f7736dc445495f872663cc3cc034a27d7744"
 dependencies = [
  "skyline",
  "ssbusync-guest",
@@ -669,6 +671,7 @@ dependencies = [
 [[package]]
 name = "ultelier-macros"
 version = "2.0.0"
+source = "git+https://github.com/project-ultelier/smash-ultelier.git#9762f7736dc445495f872663cc3cc034a27d7744"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -677,15 +680,15 @@ dependencies = [
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.24"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "uuid"
-version = "1.26.0"
+version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
 dependencies = [
  "getrandom",
  "js-sys",
@@ -700,12 +703,11 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.127"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b70935747edd64d89de3efa29d73789b806c15798f8e7dca4d8ac356b50ce70"
+checksum = "a0181c14ddd6c7b8b0b0132a5f1ea2f32be0d893cd3ea97b6e3b28886b8a3d1c"
 dependencies = [
  "cfg-if",
- "once_cell",
  "rustversion",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
@@ -713,9 +715,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.127"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77775f8f3f7217702089053b94958f8f54061a3f663417df76e19cbdcca29bc1"
+checksum = "6e931a02a39abdbf66966fc35902b5ed58344750a70885bed4ebb3d8eaf28ed9"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -723,22 +725,22 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.127"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e11d33f857dc2fb11b8bc75aee111aa9cbeb12cd9f25efd3d4c2a3dd4e235284"
+checksum = "2ca4b54280e455bd831e33a6b8e734baf432fe63fbc35c42ac14ce67a043a53a"
 dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.127"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
+checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
 ]
@@ -754,24 +756,24 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.56"
+version = "0.8.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "556764e583adb45a9f8d413c2a147fa7e8d821e48e12b14fd560b607998b75eb"
+checksum = "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.56"
+version = "0.8.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ab42fc20575779bd240faa45f94a74256f755c0fa9e89f0ede20d91d0cdfc1"
+checksum = "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f"
 dependencies = [
  "proc-macro2",
  "quote",

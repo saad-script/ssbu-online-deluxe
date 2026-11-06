@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 
 use serde::{de::IntoDeserializer, Deserialize, Deserializer};
 use ssbu_pia_interface::StationConnectionManager;
@@ -57,11 +60,8 @@ impl RenderProfileOverrides {
 #[derive(Debug, Default, Deserialize, Clone, Copy)]
 #[serde(default)]
 pub struct RenderProfileOverride {
-    /// Overclock (MHz). Only applied on console with `overclocker = true`.
     pub overclock: Option<OverclockOverride>,
-    /// Base render resolution, e.g. `"1280x720"`.
     pub default_resolution: Option<ResolutionSetting>,
-    /// Resolution used during heavy moves, e.g. `"854x480"`, or `"none"` to disable.
     pub dynamic_resolution: Option<ResolutionSetting>,
 }
 
@@ -73,13 +73,26 @@ pub struct OverclockOverride {
     pub mem: u32,
 }
 
-impl From<OverclockOverride> for OverclockProfile {
-    fn from(oc: OverclockOverride) -> Self {
-        OverclockProfile::Custom(OverclockConfig::new(oc.cpu, oc.gpu, oc.mem))
+impl RenderProfileOverride {
+    fn apply_to(&self, rps: &mut RenderProfileSettings) {
+        if let Some(oc) = self.overclock {
+            rps.overclock = Some(oc.into());
+        }
+        if let Some(default_res) = self.default_resolution.and_then(|r| r.level()) {
+            rps.default_resolution_level = default_res;
+        }
+        if let Some(dynamic_res) = self.dynamic_resolution {
+            rps.dynamic_resolution_level = dynamic_res.level();
+        }
     }
 }
 
-/// A resolution level as written in the config file (`"1920x1080"`, `"720p"`, `"none"`, ...).
+impl From<OverclockOverride> for OverclockConfig {
+    fn from(oc: OverclockOverride) -> Self {
+        OverclockConfig::new(oc.cpu, oc.gpu, oc.mem)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionSetting {
@@ -196,7 +209,7 @@ pub struct RenderProfile {
 }
 
 impl RenderProfile {
-    pub fn new(preset: RenderProfilePreset, boost_enabled: bool) -> Self {
+    pub const fn new(preset: RenderProfilePreset, boost_enabled: bool) -> Self {
         let fps_boost_status = if boost_enabled {
             FPSBoostStatus::Enabled
         } else {
@@ -277,15 +290,16 @@ pub enum RenderProfilePreset {
     Custom = 4,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderProfileSettings {
-    buffer_mode: BufferMode,
-    index_mode: IndexMode,
-    default_resolution_level: ResolutionLevel,
-    dynamic_resolution_level: Option<ResolutionLevel>,
-    vsync_enabled: bool,
-    render_opts_enabled: bool,
-    boost_enabled: bool,
+    pub(crate) buffer_mode: BufferMode,
+    pub(crate) index_mode: IndexMode,
+    pub(crate) default_resolution_level: ResolutionLevel,
+    pub(crate) dynamic_resolution_level: Option<ResolutionLevel>,
+    pub(crate) vsync_enabled: bool,
+    pub(crate) render_opts_enabled: bool,
+    pub(crate) boost_enabled: bool,
+    pub(crate) overclock: Option<OverclockConfig>,
 }
 
 impl RenderProfileSettings {
@@ -298,6 +312,7 @@ impl RenderProfileSettings {
             vsync_enabled: true,
             render_opts_enabled: false,
             boost_enabled: false,
+            overclock: None,
         }
     }
     pub fn less_lag() -> Self {
@@ -313,6 +328,7 @@ impl RenderProfileSettings {
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
+            overclock: None,
         }
     }
     pub fn less_lag_ultra() -> Self {
@@ -331,6 +347,7 @@ impl RenderProfileSettings {
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
+            overclock: None,
         }
     }
     pub fn less_lag_doubles() -> Self {
@@ -346,9 +363,28 @@ impl RenderProfileSettings {
             vsync_enabled: false,
             render_opts_enabled: true,
             boost_enabled: false,
+            overclock: None,
         }
     }
-    pub fn from_render_profile(rp: RenderProfile) -> Self {
+    fn preset_overclock(preset: RenderProfilePreset, is_doubles: bool) -> Option<OverclockProfile> {
+        match (preset, is_doubles) {
+            (RenderProfilePreset::Vanilla, _) => None,
+            (RenderProfilePreset::LessLagUltra, _) => Some(OverclockProfile::PerformanceFfa),
+            (
+                RenderProfilePreset::LessLag
+                | RenderProfilePreset::LessLagDoubles
+                | RenderProfilePreset::Custom,
+                true,
+            ) => Some(OverclockProfile::PerformanceFfa),
+            (
+                RenderProfilePreset::LessLag
+                | RenderProfilePreset::LessLagDoubles
+                | RenderProfilePreset::Custom,
+                false,
+            ) => Some(OverclockProfile::PerformanceSingles),
+        }
+    }
+    pub fn from_render_profile(rp: RenderProfile, is_doubles: bool) -> Self {
         let mut rps = match rp.preset {
             RenderProfilePreset::Vanilla => RenderProfileSettings::vanilla(),
             RenderProfilePreset::LessLag => RenderProfileSettings::less_lag(),
@@ -357,16 +393,15 @@ impl RenderProfileSettings {
             _ => panic!("Must specific a valid render profile"),
         };
         rps.boost_enabled = rp.boost_enabled();
+        rps.overclock = Self::preset_overclock(rp.preset, is_doubles).map(OverclockProfile::config);
 
-        // layer resolution overrides from config on top of the preset
         let rc = &CONFIG.load().render_config;
         if let Some(ov) = rc.render_profile_config.overrides.for_preset(rp.preset) {
-            if let Some(default_res) = ov.default_resolution.and_then(|r| r.level()) {
-                rps.default_resolution_level = default_res;
-            }
-            if let Some(dynamic_res) = ov.dynamic_resolution {
-                rps.dynamic_resolution_level = dynamic_res.level();
-            }
+            ov.apply_to(&mut rps);
+        }
+
+        if !rc.overclocker || is_emulator() {
+            rps.overclock = None;
         }
         rps
     }
@@ -380,63 +415,9 @@ impl RenderProfileSettings {
             vsync_enabled: sync_guest::vsync_enabled().unwrap_or(true),
             render_opts_enabled: sync_guest::render_opts_enabled().unwrap_or(false),
             boost_enabled: sync_guest::fps_boost_enabled().unwrap_or(false),
+            overclock: sync_guest::profile::cached_overclock_profile()
+                .map(OverclockProfile::config),
         }
-    }
-    // Bit layout (must match between `to_bits` and `from_bits`):
-    //   [ 0.. 2)  buffer_mode              (2 bits)
-    //   [ 2.. 4)  index_mode               (2 bits)
-    //   [ 4.. 8)  default_resolution_level (4 bits)
-    //   [ 8..12)  dynamic_resolution_level (4 bits; sentinel 0xF == None)
-    //   [12..13)  vsync_enabled            (1 bit)
-    //   [13..14)  render_opts_enabled      (1 bit)
-    //   [14..15)  boost_enabled            (1 bit)
-    const BUFFER_MODE_SHIFT: u16 = 0;
-    const BUFFER_MODE_MASK: u16 = 0b11;
-    const INDEX_MODE_SHIFT: u16 = 2;
-    const INDEX_MODE_MASK: u16 = 0b11;
-    const DEFAULT_RES_SHIFT: u16 = 4;
-    const DEFAULT_RES_MASK: u16 = 0xF;
-    const DYNAMIC_RES_SHIFT: u16 = 8;
-    const DYNAMIC_RES_MASK: u16 = 0xF;
-    const DYNAMIC_RES_NONE: u16 = 0xF;
-    const VSYNC_SHIFT: u16 = 12;
-    const RENDER_OPTS_SHIFT: u16 = 13;
-    const BOOST_SHIFT: u16 = 14;
-
-    pub fn from_bits(bits: u16) -> Option<Self> {
-        Some(Self {
-            buffer_mode: BufferMode::from_u32(
-                ((bits >> Self::BUFFER_MODE_SHIFT) & Self::BUFFER_MODE_MASK) as u32,
-            )?,
-            index_mode: IndexMode::from_u32(
-                ((bits >> Self::INDEX_MODE_SHIFT) & Self::INDEX_MODE_MASK) as u32,
-            )?,
-            default_resolution_level: ResolutionLevel::from_u32(
-                ((bits >> Self::DEFAULT_RES_SHIFT) & Self::DEFAULT_RES_MASK) as u32,
-            )?,
-            dynamic_resolution_level: ResolutionLevel::from_u32(
-                ((bits >> Self::DYNAMIC_RES_SHIFT) & Self::DYNAMIC_RES_MASK) as u32,
-            ),
-            vsync_enabled: ((bits >> Self::VSYNC_SHIFT) & 1) != 0,
-            render_opts_enabled: ((bits >> Self::RENDER_OPTS_SHIFT) & 1) != 0,
-            boost_enabled: ((bits >> Self::BOOST_SHIFT) & 1) != 0,
-        })
-    }
-    pub const fn to_bits(&self) -> u16 {
-        let dynamic_res_level: u16 = if let Some(l) = self.dynamic_resolution_level {
-            (l as u16) & Self::DYNAMIC_RES_MASK
-        } else {
-            Self::DYNAMIC_RES_NONE
-        };
-
-        (((self.buffer_mode as u16) & Self::BUFFER_MODE_MASK) << Self::BUFFER_MODE_SHIFT)
-            | (((self.index_mode as u16) & Self::INDEX_MODE_MASK) << Self::INDEX_MODE_SHIFT)
-            | (((self.default_resolution_level as u16) & Self::DEFAULT_RES_MASK)
-                << Self::DEFAULT_RES_SHIFT)
-            | (dynamic_res_level << Self::DYNAMIC_RES_SHIFT)
-            | ((self.vsync_enabled as u16) << Self::VSYNC_SHIFT)
-            | ((self.render_opts_enabled as u16) << Self::RENDER_OPTS_SHIFT)
-            | ((self.boost_enabled as u16) << Self::BOOST_SHIFT)
     }
 
     #[allow(dead_code)]
@@ -467,11 +448,16 @@ impl RenderProfileSettings {
     pub fn boost_enabled(&self) -> bool {
         self.boost_enabled
     }
+    #[allow(dead_code)]
+    pub fn overclock(&self) -> Option<OverclockConfig> {
+        self.overclock
+    }
 }
 
 pub struct RenderProfileManager {
     auto_mode: AtomicBool,
-    selected_profile_settings: AtomicU16,
+    is_doubles: AtomicBool,
+    selected_profile: Mutex<RenderProfile>,
 }
 
 #[allow(dead_code)]
@@ -479,7 +465,8 @@ impl RenderProfileManager {
     const fn new() -> Self {
         RenderProfileManager {
             auto_mode: AtomicBool::new(true),
-            selected_profile_settings: AtomicU16::new(RenderProfileSettings::vanilla().to_bits()),
+            is_doubles: AtomicBool::new(false),
+            selected_profile: Mutex::new(RenderProfile::new(RenderProfilePreset::Vanilla, false)),
         }
     }
     pub fn instance() -> &'static Self {
@@ -487,23 +474,23 @@ impl RenderProfileManager {
         &RENDER_PROFILE_MANAGER
     }
     pub fn selected_render_profile_settings(&self) -> RenderProfileSettings {
-        RenderProfileSettings::from_bits(self.selected_profile_settings.load(Ordering::SeqCst))
-            .unwrap()
+        RenderProfileSettings::from_render_profile(
+            self.selected_render_profile(),
+            self.is_doubles.load(Ordering::SeqCst),
+        )
     }
     pub fn active_render_profile_settings() -> RenderProfileSettings {
         RenderProfileSettings::from_env()
     }
     pub fn selected_render_profile(&self) -> RenderProfile {
-        RenderProfile::from_settings(&self.selected_render_profile_settings())
+        *self.selected_profile.lock().unwrap()
     }
     pub fn active_render_profile() -> RenderProfile {
         RenderProfile::from_settings(&Self::active_render_profile_settings())
     }
     pub fn selected_render_profile_set_boost_enabled(&self, boost_enabled: bool) {
-        let mut rps = self.selected_render_profile_settings();
-        rps.boost_enabled = boost_enabled && is_emulator();
-        self.selected_profile_settings
-            .store(rps.to_bits(), Ordering::SeqCst);
+        let mut selected_rp = self.selected_profile.lock().unwrap();
+        *selected_rp = RenderProfile::new(selected_rp.preset, boost_enabled && is_emulator());
     }
     pub fn apply_selected_profile_settings(&self) {
         Self::apply_render_profile_settings_immediate(&self.selected_render_profile_settings());
@@ -521,9 +508,7 @@ impl RenderProfileManager {
             RenderProfilePreset::Custom => RenderProfilePreset::Vanilla,
         };
         let next_rp = RenderProfile::new(next_preset, selected_rp.boost_enabled());
-        let next_rps = RenderProfileSettings::from_render_profile(next_rp);
-        self.selected_profile_settings
-            .store(next_rps.to_bits(), Ordering::SeqCst);
+        self.select_render_profile_immediate(next_rp);
         next_rp
     }
     pub fn select_prev_render_profile(&self) -> RenderProfile {
@@ -539,9 +524,7 @@ impl RenderProfileManager {
             RenderProfilePreset::Custom => RenderProfilePreset::Vanilla,
         };
         let prev_rp = RenderProfile::new(prev_preset, selected_rp.boost_enabled());
-        let prev_rps = RenderProfileSettings::from_render_profile(prev_rp);
-        self.selected_profile_settings
-            .store(prev_rps.to_bits(), Ordering::SeqCst);
+        self.select_render_profile_immediate(prev_rp);
         prev_rp
     }
     pub fn is_auto_mode(&self) -> bool {
@@ -550,7 +533,7 @@ impl RenderProfileManager {
     pub fn set_auto_mode(&self, auto_mode: bool) {
         self.auto_mode.store(auto_mode, Ordering::SeqCst);
         let num_connected_stations = StationConnectionManager::num_connected_stations();
-        self.auto_select_profile(is_valid_online_mode(), num_connected_stations > 1);
+        self.refresh_profile(is_valid_online_mode(), num_connected_stations > 1);
     }
     pub fn poll(
         &self,
@@ -561,8 +544,8 @@ impl RenderProfileManager {
         let boost_buttons = input_snapshot
             .check_buttons_pressed_with_cooldown(&[unsafe { TOGGLE_FPS_BOOST_KEYBIND }]);
         if !boost_buttons.is_empty() {
-            let rps = self.selected_render_profile_settings();
-            self.selected_render_profile_set_boost_enabled(!rps.boost_enabled);
+            let rp = self.selected_render_profile();
+            self.selected_render_profile_set_boost_enabled(!rp.boost_enabled());
             return true;
         }
 
@@ -571,8 +554,10 @@ impl RenderProfileManager {
             if self.is_auto_mode() {
                 self.set_auto_mode(false);
                 let selected_rp = self.selected_render_profile();
-                let rp =
-                    RenderProfile::new(RenderProfilePreset::Vanilla, selected_rp.boost_enabled());
+                let rp = RenderProfile::new(
+                    RenderProfilePreset::LessLagDoubles,
+                    selected_rp.boost_enabled(),
+                );
                 self.select_render_profile_immediate(rp);
             } else {
                 if self.selected_render_profile().preset == RenderProfilePreset::Vanilla {
@@ -623,7 +608,8 @@ impl RenderProfileManager {
 
         rp
     }
-    pub fn auto_select_profile(&self, is_online: bool, is_doubles: bool) {
+    pub fn refresh_profile(&self, is_online: bool, is_doubles: bool) {
+        self.is_doubles.store(is_doubles, Ordering::SeqCst);
         if !self.is_auto_mode() {
             return;
         }
@@ -632,10 +618,7 @@ impl RenderProfileManager {
         println!("AUTO SELECT RP: {:?}", rp);
     }
     fn select_render_profile_immediate(&self, rp: RenderProfile) {
-        self.selected_profile_settings.store(
-            RenderProfileSettings::from_render_profile(rp).to_bits(),
-            Ordering::SeqCst,
-        );
+        *self.selected_profile.lock().unwrap() = rp;
     }
     fn apply_render_profile_settings_immediate(rps: &RenderProfileSettings) {
         let is_emulator = is_emulator();
@@ -673,36 +656,10 @@ impl RenderProfileManager {
         // set overclock profile
         let rc = &CONFIG.load().render_config;
         if rc.overclocker && !is_emulator {
-            let preset = RenderProfile::from_settings(&rps).preset;
-            let oc_override = rc
-                .render_profile_config
-                .overrides
-                .for_preset(preset)
-                .and_then(|ov| ov.overclock);
-            let oc_profile = match (preset, get_match_status()) {
-                (_, MatchStatus::Inactive) => None,
-                // config override takes priority over the built-in mapping
-                (_, _) if oc_override.is_some() => oc_override.map(OverclockProfile::from),
-                (RenderProfilePreset::Vanilla, _) => None,
-                (RenderProfilePreset::LessLagUltra, _) => Some(OverclockProfile::PerformanceFfa),
-                (
-                    RenderProfilePreset::LessLag
-                    | RenderProfilePreset::LessLagDoubles
-                    | RenderProfilePreset::Custom,
-                    MatchStatus::Doubles,
-                ) => Some(OverclockProfile::PerformanceFfa),
-                (
-                    RenderProfilePreset::LessLag
-                    | RenderProfilePreset::LessLagDoubles
-                    | RenderProfilePreset::Custom,
-                    MatchStatus::Singles | MatchStatus::Training,
-                ) => Some(OverclockProfile::PerformanceSingles),
+            match rps.overclock {
+                Some(oc) => sync_guest::profile::apply_profile(OverclockProfile::from_config(oc)),
+                None => sync_guest::profile::clear_profile(),
             };
-            if let Some(oc_profile) = oc_profile {
-                sync_guest::profile::apply_profile(oc_profile);
-            } else {
-                sync_guest::profile::clear_profile();
-            }
         }
     }
 }
@@ -711,13 +668,13 @@ pub(crate) fn match_init() {
     let is_valid_online_mode = is_valid_online_mode();
     let is_connected = is_connected();
     let match_status = get_match_status();
+    let is_doubles = match_status == MatchStatus::Doubles;
     let in_real_online_match = is_connected && match_status != MatchStatus::Training;
 
     if in_real_online_match {
         if is_valid_online_mode {
             // apply selected profile if its a valid online match
-            RenderProfileManager::instance()
-                .auto_select_profile(true, match_status == MatchStatus::Doubles);
+            RenderProfileManager::instance().refresh_profile(true, is_doubles);
             RenderProfileManager::instance().apply_selected_profile_settings();
         } else {
             // ssbusync already enforces this, but leaving this here for clarity
@@ -726,27 +683,25 @@ pub(crate) fn match_init() {
             );
         }
     } else {
-        let rp = RenderProfileManager::instance()
-            .recommended_render_profile(false, match_status == MatchStatus::Doubles);
-        let rps = RenderProfileSettings::from_render_profile(rp);
+        let rp = RenderProfileManager::instance().recommended_render_profile(false, is_doubles);
+        let rps = RenderProfileSettings::from_render_profile(rp, is_doubles);
         RenderProfileManager::apply_render_profile_settings_immediate(&rps);
     }
 }
 
-pub(crate) fn match_cleanup() {
+fn apply_menu_profile() {
     let rc = &CONFIG.load().render_config;
-    let menu_rp = rc.render_profile_config.menu;
-    RenderProfileManager::apply_render_profile_settings_immediate(
-        &RenderProfileSettings::from_render_profile(menu_rp),
-    );
+    let mut rps = RenderProfileSettings::from_render_profile(rc.render_profile_config.menu, false);
+    rps.overclock = None;
+    RenderProfileManager::apply_render_profile_settings_immediate(&rps);
+}
+
+pub(crate) fn match_cleanup() {
+    apply_menu_profile();
 }
 
 pub(super) fn on_nro_load() {
-    let rc = &CONFIG.load().render_config;
-    let menu_rp = rc.render_profile_config.menu;
-    RenderProfileManager::apply_render_profile_settings_immediate(
-        &RenderProfileSettings::from_render_profile(menu_rp),
-    );
+    apply_menu_profile();
 }
 
 pub(super) fn install() {

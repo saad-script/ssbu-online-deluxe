@@ -1,205 +1,219 @@
 //! All PIA custom-comms packet versions and their parsers, in one place.
 //!
+//! Packets travel on our own PIA [`Channel`](ssbu_pia_interface::Channel), so
+//! nothing older than v1 (the 4-byte payloads piggybacked on PIA's own packets
+//! before the channel API existed) can ever arrive here.
+//!
+//! Every packet starts with a [`Header`]. `compat_version` is the oldest
+//! version whose layout is a prefix of this packet, which lets peers read
+//! packets from newer peers as long as the newer layout only appended fields.
+//!
 //! ## Adding a new wire-format version
 //!
 //! 1. Bump [`CURRENT_VERSION`].
-//! 2. Change [`Current`] to point at your new `vN::Packet` type. The rest of
-//!    the crate always deals with `Current` (re-exported from
-//!    [`super::PiaCustomNetPacket`]), so bumping the alias is the only
-//!    downstream churn.
-//! 3. Add a new `mod vN` below with:
-//!      - a `#[repr(C, packed)]` `Packet` struct
-//!      - an `impl From<Packet> for Current` that up-converts to the new layout
-//! 4. Add a match arm for `N` in [`decode`].
+//! 2. Add a new `mod vN` below with a `#[repr(C)]` `Packet` and change
+//!    [`PiaPacket`] to point at it. The rest of the crate always deals with
+//!    `PiaPacket`, so bumping the alias is the only downstream churn.
+//! 3. If `vN::Packet` only appends fields to the previous layout, leave
+//!    [`COMPAT_VERSION`] alone so older peers keep reading the prefix they know.
+//!    Otherwise set it to `N`.
+//! 4. Give the previous version an `impl From<&vM::Packet> for PiaPacket` that
+//!    up-converts it and add a match arm for it in [`decode`].
 //!
 //! Older `mod vN` modules should be treated as frozen: never edit an existing
 //! layout, only add new ones.
 
-use std::borrow::Cow;
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
+use crate::{net::latency_slider::StationLatency, render::profile::RenderProfileSettings};
+use ultelier::sync_guest::{BufferMode, IndexMode, OverclockConfig, ResolutionLevel};
 
-use crate::render::profile::RenderProfileSettings;
+/// Wire-format version of the packets we send. Bump when the layout of
+/// [`PiaPacket`] changes.
+pub(super) const CURRENT_VERSION: u16 = 1;
 
-/// Wire-format version number transmitted in the `version` field of every
-/// packet. Bump when the layout of [`Current`] changes.
-pub(super) const CURRENT_VERSION: u8 = 4;
+/// Oldest version whose layout is a prefix of [`PiaPacket`]: peers at or above
+/// this version can read our packets.
+pub(super) const COMPAT_VERSION: u16 = 1;
 
 /// The current on-wire packet type. All non-parsing code should reference this
 /// alias so a version bump only requires editing this file.
-pub(super) type PiaPacket = v4::Packet;
+pub(super) type PiaPacket = v1::Packet;
+
+/// Shared by every version, so a peer can always tell what it is reading.
+#[repr(C)]
+#[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Debug, Clone, Copy)]
+pub(super) struct Header {
+    pub(super) version: u16,
+    pub(super) compat_version: u16,
+}
+
+impl Header {
+    pub(super) const fn current() -> Self {
+        Self {
+            version: CURRENT_VERSION,
+            compat_version: COMPAT_VERSION,
+        }
+    }
+}
 
 /// Errors that can occur while decoding an incoming packet.
 #[derive(Debug)]
 #[allow(dead_code)] // fields used only via Debug in log output
 pub(super) enum DecodeError {
-    /// Packet was too short to even read the version byte, or its size did
-    /// not match the layout expected for its declared version.
+    /// Packet was shorter than the layout expected for its declared version.
     InvalidData,
-    /// The `version` byte does not correspond to any known packet version.
-    UnknownVersion(u8),
+    /// The packet's layout is newer than anything this build can read.
+    UnknownVersion(u16),
+    /// The packet decoded, but one of its fields holds a value we don't know.
+    InvalidField(&'static str),
 }
 
-/// Decode a raw incoming packet as any known version and up-convert it to
-/// [`PiaPacket`].
-///
-/// Returns a [`Cow`]:
-///   - `Cow::Borrowed` for the current version (zero-copy view directly into
-///     `data`),
-///   - `Cow::Owned`    for legacy versions (an up-converted packet built on
-///     the stack; unavoidable since older layouts differ).
-pub(super) fn decode(data: &[u8]) -> Result<Cow<'_, PiaPacket>, DecodeError> {
-    let version = *data.first().ok_or(DecodeError::InvalidData)?;
-    match version {
-        4 => v4::Packet::ref_from_bytes(data)
-            .map(Cow::Borrowed)
-            .map_err(|_| DecodeError::InvalidData),
-        3 => v3::Packet::ref_from_bytes(data)
-            .map(|p| Cow::Owned(PiaPacket::from(p)))
-            .map_err(|_| DecodeError::InvalidData),
-        2 => v2::Packet::ref_from_bytes(data)
-            .map(|p| Cow::Owned(PiaPacket::from(p)))
-            .map_err(|_| DecodeError::InvalidData),
-        v => Err(DecodeError::UnknownVersion(v)),
-    }
+/// Decoded contents of a packet from any known version.
+#[derive(Debug, Clone)]
+pub(super) struct StationState {
+    pub(super) latency: StationLatency,
+    pub(super) render_profile_settings: RenderProfileSettings,
 }
 
-// ---------------------------------------------------------------------------
-// Shared legacy bit-layout (v2 & v3)
-// ---------------------------------------------------------------------------
-//
-// Both v2 and v3 used the same u16 bit layout for `render_profile_settings`
-// except for the top two bits:
-//
-//   [ 0.. 2)  buffer_mode
-//   [ 2.. 4)  index_mode
-//   [ 4..11)  default_resolution_level  (7 bits, values 0..=4)
-//   [11..12)  dynamic_res_enabled       (bool)
-//   [12..13)  vsync_enabled
-//   [13..14)  render_opts_enabled
-//   [14..16)  v2: overclock_profile (2 bits, discarded)
-//             v3: boost_enabled     (1 bit at 14)
-//
-// `dynamic_res_enabled` was a bool; the actual resolution level was derived
-// from the preset at apply time. For display / preset derivation only
-// buffer/index/vsync/render_opts matter, so any valid level works when
-// translating to the new `Option<ResolutionLevel>` field.
-
-struct LegacyRps {
-    buffer_index: u16, // packed buffer_mode | index_mode (bits 0..4)
-    default_res: u16,  // 0..=4
-    dynamic_res_enabled: bool,
-    vsync_enabled: bool,
-    render_opts_enabled: bool,
-    boost_enabled: bool,
+/// Decode a raw incoming packet as any known version.
+pub(super) fn decode(data: &[u8]) -> Result<StationState, DecodeError> {
+    let (header, _) = Header::read_from_prefix(data).map_err(|_| DecodeError::InvalidData)?;
+    let packet = match header.version {
+        CURRENT_VERSION => read_current(data)?,
+        // a newer peer whose layout starts with ours
+        v if v > CURRENT_VERSION && header.compat_version <= CURRENT_VERSION => read_current(data)?,
+        v => return Err(DecodeError::UnknownVersion(v)),
+    };
+    packet.to_station_state()
 }
 
-impl LegacyRps {
-    fn from_v2_or_v3_bits(bits: u16, has_boost_bit: bool) -> Self {
-        Self {
-            buffer_index: bits & 0b1111,
-            default_res: (bits >> 4) & 0x7F,
-            dynamic_res_enabled: ((bits >> 11) & 1) != 0,
-            vsync_enabled: ((bits >> 12) & 1) != 0,
-            render_opts_enabled: ((bits >> 13) & 1) != 0,
-            boost_enabled: has_boost_bit && ((bits >> 14) & 1) != 0,
-        }
-    }
-
-    /// Re-encode as a v4 `RenderProfileSettings` bit-blob.
-    fn to_v4_rps_bits(&self) -> u16 {
-        let default_res = if self.default_res <= 0xF {
-            self.default_res
-        } else {
-            (RenderProfileSettings::vanilla().to_bits() >> 4) & 0xF
-        };
-
-        // Pick an arbitrary valid resolution level (Res854x480 = 4) when the
-        // peer had dynamic res enabled; sentinel 0xF == None otherwise.
-        let dynamic_res_field: u16 = if self.dynamic_res_enabled { 4 } else { 0xF };
-
-        self.buffer_index
-            | (default_res << 4)
-            | (dynamic_res_field << 8)
-            | ((self.vsync_enabled as u16) << 12)
-            | ((self.render_opts_enabled as u16) << 13)
-            | ((self.boost_enabled as u16) << 14)
-    }
+fn read_current(data: &[u8]) -> Result<PiaPacket, DecodeError> {
+    PiaPacket::read_from_prefix(data)
+        .map(|(p, _)| p)
+        .map_err(|_| DecodeError::InvalidData)
 }
 
 // ---------------------------------------------------------------------------
-// v4 — CURRENT
+// v1 — CURRENT
 // ---------------------------------------------------------------------------
-pub(super) mod v4 {
+pub(super) mod v1 {
     use super::*;
 
-    /// Current wire-format layout.
-    ///
-    /// `render_profile_settings_bits` follows the layout documented on
-    /// `RenderProfileSettings::to_bits` (15 bits, 4-bit resolution fields).
-    #[repr(C, packed)]
-    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Unaligned, Debug, Clone)]
+    /// Sentinel for `dynamic_resolution_level` meaning dynamic res is off.
+    const RES_NONE: u8 = u8::MAX;
+    /// Sentinel for `WireLatency::frames` meaning auto hasn't resolved yet.
+    const FRAMES_UNKNOWN: u8 = u8::MAX;
+
+    #[repr(C)]
+    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Debug, Clone)]
     pub(in crate::net::pia) struct Packet {
-        pub(in crate::net::pia) version: u8,
-        pub(in crate::net::pia) latency_bits: u8,
-        pub(in crate::net::pia) render_profile_settings_bits: u16,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// v3 (released in v1.4.0 / v1.4.1)
-// ---------------------------------------------------------------------------
-mod v3 {
-    use super::*;
-
-    #[repr(C, packed)]
-    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Unaligned, Debug)]
-    pub(super) struct Packet {
-        pub version: u8,
-        pub latency_bits: u8,
-        pub render_profile_settings_bits: u16,
+        pub(in crate::net::pia) header: Header,
+        pub(in crate::net::pia) latency: WireLatency,
+        pub(in crate::net::pia) render_profile_settings: WireRenderProfileSettings,
     }
 
-    impl From<&Packet> for PiaPacket {
-        fn from(p: &Packet) -> PiaPacket {
-            let rps = LegacyRps::from_v2_or_v3_bits(
-                p.render_profile_settings_bits,
-                /* has_boost_bit = */ true,
-            );
-            PiaPacket {
-                version: CURRENT_VERSION,
-                latency_bits: p.latency_bits,
-                render_profile_settings_bits: rps.to_v4_rps_bits(),
+    #[repr(C)]
+    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Debug, Clone)]
+    pub(in crate::net::pia) struct WireLatency {
+        auto: u8,
+        /// The chosen input buffer, or with `auto` the one the game picked
+        /// at the start of the last match (`FRAMES_UNKNOWN` before that).
+        frames: u8,
+        _reserved: [u8; 2],
+    }
+
+    #[repr(C)]
+    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Debug, Clone)]
+    pub(in crate::net::pia) struct WireRenderProfileSettings {
+        buffer_mode: u8,
+        index_mode: u8,
+        default_resolution_level: u8,
+        dynamic_resolution_level: u8,
+        vsync_enabled: u8,
+        render_opts_enabled: u8,
+        boost_enabled: u8,
+        overclock_enabled: u8,
+        overclock_cpu_mhz: u32,
+        overclock_gpu_mhz: u32,
+        overclock_mem_mhz: u32,
+    }
+
+    impl Packet {
+        pub(in crate::net::pia) fn new(
+            latency: StationLatency,
+            rps: &RenderProfileSettings,
+        ) -> Self {
+            let overclock = rps.overclock.unwrap_or(OverclockConfig::new(0, 0, 0));
+            Self {
+                header: Header::current(),
+                latency: match latency {
+                    StationLatency::Manual(frames) => WireLatency {
+                        auto: 0,
+                        frames,
+                        _reserved: [0; 2],
+                    },
+                    StationLatency::Auto(frames) => WireLatency {
+                        auto: 1,
+                        frames: frames.unwrap_or(FRAMES_UNKNOWN),
+                        _reserved: [0; 2],
+                    },
+                },
+                render_profile_settings: WireRenderProfileSettings {
+                    buffer_mode: rps.buffer_mode as u8,
+                    index_mode: rps.index_mode as u8,
+                    default_resolution_level: rps.default_resolution_level as u8,
+                    dynamic_resolution_level: rps
+                        .dynamic_resolution_level
+                        .map_or(RES_NONE, |l| l as u8),
+                    vsync_enabled: rps.vsync_enabled as u8,
+                    render_opts_enabled: rps.render_opts_enabled as u8,
+                    boost_enabled: rps.boost_enabled as u8,
+                    overclock_enabled: rps.overclock.is_some() as u8,
+                    overclock_cpu_mhz: overclock.cpu_hz,
+                    overclock_gpu_mhz: overclock.gpu_hz,
+                    overclock_mem_mhz: overclock.mem_hz,
+                },
             }
         }
-    }
-}
 
-// ---------------------------------------------------------------------------
-// v2
-// ---------------------------------------------------------------------------
-mod v2 {
-    use super::*;
-
-    #[repr(C, packed)]
-    #[derive(Immutable, FromBytes, IntoBytes, KnownLayout, Unaligned, Debug)]
-    pub(super) struct Packet {
-        pub version: u8,
-        pub latency_bits: u8,
-        pub render_profile_settings_bits: u16,
-    }
-
-    impl From<&Packet> for PiaPacket {
-        fn from(p: &Packet) -> PiaPacket {
-            let rps = LegacyRps::from_v2_or_v3_bits(
-                p.render_profile_settings_bits,
-                /* has_boost_bit = */ false,
-            );
-            PiaPacket {
-                version: CURRENT_VERSION,
-                latency_bits: p.latency_bits,
-                render_profile_settings_bits: rps.to_v4_rps_bits(),
-            }
+        pub(super) fn to_station_state(&self) -> Result<StationState, DecodeError> {
+            let w = &self.render_profile_settings;
+            let render_profile_settings = RenderProfileSettings {
+                buffer_mode: BufferMode::from_u32(w.buffer_mode as u32)
+                    .ok_or(DecodeError::InvalidField("buffer_mode"))?,
+                index_mode: IndexMode::from_u32(w.index_mode as u32)
+                    .ok_or(DecodeError::InvalidField("index_mode"))?,
+                default_resolution_level: ResolutionLevel::from_u32(
+                    w.default_resolution_level as u32,
+                )
+                .ok_or(DecodeError::InvalidField("default_resolution_level"))?,
+                dynamic_resolution_level: match w.dynamic_resolution_level {
+                    RES_NONE => None,
+                    l => Some(
+                        ResolutionLevel::from_u32(l as u32)
+                            .ok_or(DecodeError::InvalidField("dynamic_resolution_level"))?,
+                    ),
+                },
+                vsync_enabled: w.vsync_enabled != 0,
+                render_opts_enabled: w.render_opts_enabled != 0,
+                boost_enabled: w.boost_enabled != 0,
+                overclock: (w.overclock_enabled != 0).then(|| {
+                    OverclockConfig::new(
+                        w.overclock_cpu_mhz,
+                        w.overclock_gpu_mhz,
+                        w.overclock_mem_mhz,
+                    )
+                }),
+            };
+            Ok(StationState {
+                latency: match (self.latency.auto, self.latency.frames) {
+                    (0, frames) => StationLatency::Manual(frames),
+                    (_, FRAMES_UNKNOWN) => StationLatency::Auto(None),
+                    (_, frames) => StationLatency::Auto(Some(frames)),
+                },
+                render_profile_settings,
+            })
         }
     }
 }
