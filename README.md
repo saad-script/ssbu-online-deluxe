@@ -36,11 +36,11 @@ A performance and online enhancement mod for **Super Smash Bros. Ultimate** that
 ### Automatic Installation
 
 Console:
-- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to the root of your SD card.
+- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder (including Horizon-OC) for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to the root of your SD card.
 - Alternatively, you can use the app I made: [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). Install, then click `Generate SDCard Folder`, then copy the generate folder contents to the root of the sd card.
 
 Emulator:
-- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat`. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1`. It will download and setup the atmosphere folder for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to your `eden/sdmc` folder.
+- From the releases page, download `create-sdcard-folder.zip` and then run `create-sdcard-folder.bat -Emulator` from a terminal. On linux, you can install powershell for your distro and run `create-sdcard-folder.ps1 -Emulator`. It will download and setup the atmosphere folder (without Horizon-OC) for you in a newly created folder `sdcard/`. Then copy the contents of `sdcard/` to your `eden/sdmc` folder.
   - Then, apply this workaround if you are on Eden emulator:
     - Right click SSBU -> Click `Configure Game` -> Click `System` tab -> Check `RNG Seed` -> Set to `00000000`
 - Alternatively, you can use the app I made: [ssbu-emu-optimizer](https://github.com/saad-script/ssbu-emu-optimizer/releases). Install, and then configure it to point to the correct eden folder, then check `SSBU Settings`, `SSBU Mods`, `Save Data` (if you want a 100% save), then click optimize.
@@ -55,10 +55,10 @@ Anything marked with `*` is not needed on emulator.
 `sdcard/` (or `sdmc/` on emulator)
 │
 ├── atmosphere/
+│   ├── *exosphere.bin
+│   ├── *kips/
+│   │   └── *hoc.kip
 │   └── contents/
-│       ├── *exosphere.bin
-│       ├── *kips/
-│       │    └── *hoc.kip
 │       ├── *00FF0000636C6BFF/
 │       │    ├── *exefs.nsp
 │       │    ├── *toolbox.json
@@ -79,7 +79,7 @@ Anything marked with `*` is not needed on emulator.
 │                       ├── libimgui_smash.nro
 │                       ├── libnro_hook.nro
 │                       ├── libsmashline_plugin.nro
-│                       ├── *libssbuoc_bridge.nro
+│                       ├── *libssbu_oc_bridge.nro
 │                       ├── libssbusync.nro
 │                       ├── libssbu_online_deluxe.nro
 │                       └── libssbu_pia_manager.nro

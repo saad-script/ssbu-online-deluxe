@@ -16,12 +16,25 @@
 # Destination rules (relative to $OutputFolder):
 # - Ends with '/' or '\\': treated as folder, output name comes from Source.
 # - Otherwise: treated as full path, last component is output file name.
+#
+# Pass -Emulator to skip console-only files (Horizon-OC).
+
+param(
+    [switch]$Emulator
+)
 
 # --- Repos to process ---
 $SSBUSkylineExefsFolder = "atmosphere/contents/01006A800016E000/exefs/"
 $SSBUSkylinePluginsFolder = "atmosphere/contents/01006A800016E000/romfs/skyline/plugins/"
-$OCServiceFolder = "atmosphere/contents/00FF0000A11CE0FF/"
+$SsbuSyncServiceFolder = "atmosphere/contents/00FF0000BEEFB001/"
 $Repos = @(
+    @{
+        Repo = "WuBoytH/ozone"
+        Files = @(
+            @{ Source = "?exefs/main.npdm"; Destination = $SSBUSkylineExefsFolder }
+            @{ Source = "?exefs/subsdk9"; Destination = $SSBUSkylineExefsFolder }
+        )
+    }
     @{
         Repo = "raytwo/arcropolis"
         Files = @(
@@ -52,28 +65,38 @@ $Repos = @(
             @{ Source = "?libssbu_pia_manager.nro"; Destination = $SSBUSkylinePluginsFolder }
         )
     }
-    #@{
-    #    Repo = "project-ultelier/smash-ultelier"
-    #    Files = @(
-    #        @{ source = "?exefs.nsp"; destination = $OCServiceFolder }
-    #        @{ source = "?boot2.flag"; destination = "$OCServiceFolder/flags/boot2.flag" }
-    #        @{ source = "?libssbusync.nro"; destination = $SSBUSkylinePluginsFolder }
-    #        @{ source = "?libnx_over.nro"; destination = $SSBUSkylinePluginsFolder }
-    #    )
-    #}
+    @{
+        Repo = "project-ultelier/smash-ultelier"
+        Files = @(
+            @{ Source = "?00FF0000BEEFB001/exefs.nsp"; Destination = $SsbuSyncServiceFolder }
+            @{ Source = "?00FF0000BEEFB001/flags/boot2.flag"; Destination = "$($SsbuSyncServiceFolder)flags/boot2.flag" }
+            @{ Source = "?libssbusync.nro"; Destination = $SSBUSkylinePluginsFolder }
+            @{ Source = "?libssbu_oc_bridge.nro"; Destination = $SSBUSkylinePluginsFolder }
+        )
+    }
     @{
         Repo = "saad-script/ssbu-online-deluxe"
         Files = @(
             @{ Source = "?libssbu_online_deluxe.nro"; Destination = $SSBUSkylinePluginsFolder }
-            @{ Source = "?main.npdm"; Destination = $SSBUSkylineExefsFolder }
-            @{ Source = "?subsdk9"; Destination = $SSBUSkylineExefsFolder }
-            @{ source = "?exefs.nsp"; destination = $OCServiceFolder }
-            @{ source = "?boot2.flag"; destination = "$OCserviceFolder/flags/boot2.flag" }
-            @{ source = "?libssbusync.nro"; destination = $SSBUSkylinePluginsFolder }
-            @{ source = "?libnx_over.nro"; destination = $SSBUSkylinePluginsFolder }
         )
     }
 )
+
+# --- Console only ---
+$HorizonOCServiceFolder = "atmosphere/contents/00FF0000636C6BFF/"
+if (-not $Emulator)
+{
+    $Repos += @{
+        Repo = "Horizon-OC/Horizon-OC"
+        Files = @(
+            @{ Source = "?atmosphere/exosphere.bin"; Destination = "atmosphere/" }
+            @{ Source = "?atmosphere/kips/hoc.kip"; Destination = "atmosphere/kips/" }
+            @{ Source = "?00FF0000636C6BFF/exefs.nsp"; Destination = $HorizonOCServiceFolder }
+            @{ Source = "?00FF0000636C6BFF/toolbox.json"; Destination = $HorizonOCServiceFolder }
+            @{ Source = "?00FF0000636C6BFF/flags/boot2.flag"; Destination = "$($HorizonOCServiceFolder)flags/boot2.flag" }
+        )
+    }
+}
 
 # --- Output folder ---
 $OutputFolder = Join-Path $PSScriptRoot "sdcard"
