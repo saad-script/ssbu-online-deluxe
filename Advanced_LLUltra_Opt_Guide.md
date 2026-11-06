@@ -6,8 +6,6 @@ This guide is for players who want to use the **LLUltra profile on real Nintendo
 
 > ⚠️ **Use at your own risk.** The overclocks in this guide are intentionally conservative and should be safe for nearly all consoles. That said, overclocking always carries some risk, and that risk grows the further you push beyond the hardware's limits. In particular, setting RAM clocks too high can **corrupt your sysNAND/emuNAND**, so **back up your sysNAND/emuNAND before continuing**. You are solely responsible for any damage to your hardware or data.
 
-> ⚠️ **Firmware 23.0.0+ users:** Horizon OC does not yet support the latest Atmosphère. Please wait for a Horizon OC update before following the overclocking steps. In the meantime, you can still complete **Step 3 (Optimizing Controller Polling)**, since it does not depend on Horizon OC.
-
 ## Hardware Differences
 
 - **Erista** refers to the original/base v1 Nintendo Switch model.
